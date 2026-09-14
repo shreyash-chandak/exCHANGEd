@@ -1,0 +1,225 @@
+{
+  "$defs": {
+    "CellAttribution": {
+      "properties": {
+        "state_key": {
+          "title": "State Key",
+          "type": "string"
+        },
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "delta_p": {
+          "title": "Delta P",
+          "type": "number"
+        },
+        "lesson_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Lesson Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "state_key",
+        "action",
+        "delta_p"
+      ],
+      "title": "CellAttribution",
+      "type": "object"
+    },
+    "DriftScore": {
+      "properties": {
+        "jsd_weighted": {
+          "title": "Jsd Weighted",
+          "type": "number"
+        },
+        "jsd_ci_low": {
+          "title": "Jsd Ci Low",
+          "type": "number"
+        },
+        "jsd_ci_high": {
+          "title": "Jsd Ci High",
+          "type": "number"
+        },
+        "per_state_jsd": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Per State Jsd",
+          "type": "object"
+        },
+        "top_cells": {
+          "items": {
+            "$ref": "#/$defs/CellAttribution"
+          },
+          "title": "Top Cells",
+          "type": "array"
+        }
+      },
+      "required": [
+        "jsd_weighted",
+        "jsd_ci_low",
+        "jsd_ci_high"
+      ],
+      "title": "DriftScore",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "snapshot_id": {
+      "title": "Snapshot Id",
+      "type": "string"
+    },
+    "parent_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parent Id"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "agent_id": {
+      "title": "Agent Id",
+      "type": "string"
+    },
+    "agent_version": {
+      "title": "Agent Version",
+      "type": "integer"
+    },
+    "memory_version": {
+      "title": "Memory Version",
+      "type": "integer"
+    },
+    "window_start_t": {
+      "title": "Window Start T",
+      "type": "integer"
+    },
+    "window_end_t": {
+      "title": "Window End T",
+      "type": "integer"
+    },
+    "n_records": {
+      "title": "N Records",
+      "type": "integer"
+    },
+    "p_action": {
+      "additionalProperties": {
+        "additionalProperties": {
+          "type": "number"
+        },
+        "type": "object"
+      },
+      "title": "P Action",
+      "type": "object"
+    },
+    "n_action": {
+      "additionalProperties": {
+        "additionalProperties": {
+          "type": "integer"
+        },
+        "type": "object"
+      },
+      "title": "N Action",
+      "type": "object"
+    },
+    "p_outcome": {
+      "additionalProperties": {
+        "additionalProperties": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "type": "object"
+        },
+        "type": "object"
+      },
+      "title": "P Outcome",
+      "type": "object"
+    },
+    "p_transition": {
+      "additionalProperties": {
+        "additionalProperties": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "type": "object"
+        },
+        "type": "object"
+      },
+      "title": "P Transition",
+      "type": "object"
+    },
+    "p_initial": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "P Initial",
+      "type": "object"
+    },
+    "violation_rate": {
+      "title": "Violation Rate",
+      "type": "number"
+    },
+    "success_rate": {
+      "title": "Success Rate",
+      "type": "number"
+    },
+    "satisfaction_rate": {
+      "title": "Satisfaction Rate",
+      "type": "number"
+    },
+    "mean_cost": {
+      "title": "Mean Cost",
+      "type": "number"
+    },
+    "mean_latency_ms": {
+      "title": "Mean Latency Ms",
+      "type": "number"
+    },
+    "drift_vs_parent": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DriftScore"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "coverage": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Coverage",
+      "type": "array"
+    }
+  },
+  "required": [
+    "snapshot_id",
+    "run_id",
+    "agent_id",
+    "agent_version",
+    "memory_version",
+    "window_start_t",
+    "window_end_t",
+    "n_records",
+    "violation_rate",
+    "success_rate",
+    "satisfaction_rate",
+    "mean_cost",
+    "mean_latency_ms"
+  ],
+  "title": "BehavioralSnapshot",
+  "type": "object"
+}

@@ -1,0 +1,41 @@
+{
+  "properties": {
+    "constraint_id": {
+      "title": "Constraint Id",
+      "type": "string"
+    },
+    "detector_id": {
+      "title": "Detector Id",
+      "type": "string"
+    },
+    "agents": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Agents",
+      "type": "array"
+    },
+    "shared_state_key": {
+      "title": "Shared State Key",
+      "type": "string"
+    },
+    "evidence": {
+      "additionalProperties": true,
+      "title": "Evidence",
+      "type": "object"
+    },
+    "consensus_action": {
+      "title": "Consensus Action",
+      "type": "string"
+    }
+  },
+  "required": [
+    "constraint_id",
+    "detector_id",
+    "agents",
+    "shared_state_key",
+    "consensus_action"
+  ],
+  "title": "HarmonizationConstraint",
+  "type": "object"
+}

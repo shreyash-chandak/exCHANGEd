@@ -1,0 +1,30 @@
+{
+  "properties": {
+    "state_key": {
+      "title": "State Key",
+      "type": "string"
+    },
+    "action": {
+      "title": "Action",
+      "type": "string"
+    },
+    "delta_p": {
+      "title": "Delta P",
+      "type": "number"
+    },
+    "lesson_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Lesson Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "state_key",
+    "action",
+    "delta_p"
+  ],
+  "title": "CellAttribution",
+  "type": "object"
+}

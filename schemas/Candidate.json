@@ -1,0 +1,38 @@
+{
+  "properties": {
+    "candidate_id": {
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "do_nothing",
+        "add_lesson",
+        "remove_lessons",
+        "approval_gate"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "layer": {
+      "enum": [
+        "context",
+        "architecture"
+      ],
+      "title": "Layer",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    }
+  },
+  "required": [
+    "candidate_id",
+    "kind",
+    "layer"
+  ],
+  "title": "Candidate",
+  "type": "object"
+}

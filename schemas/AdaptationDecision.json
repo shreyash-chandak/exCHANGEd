@@ -1,0 +1,81 @@
+{
+  "properties": {
+    "decision_id": {
+      "title": "Decision Id",
+      "type": "string"
+    },
+    "cycle_idx": {
+      "title": "Cycle Idx",
+      "type": "integer"
+    },
+    "snapshot_id": {
+      "title": "Snapshot Id",
+      "type": "string"
+    },
+    "candidate_id": {
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "risk_tier": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "Risk Tier",
+      "type": "string"
+    },
+    "in_boundary": {
+      "title": "In Boundary",
+      "type": "boolean"
+    },
+    "decision": {
+      "enum": [
+        "ACCEPT",
+        "ESCALATE",
+        "REJECT",
+        "DEFER"
+      ],
+      "title": "Decision",
+      "type": "string"
+    },
+    "supervisor_verdict": {
+      "enum": [
+        "approved",
+        "rejected",
+        "not_consulted"
+      ],
+      "title": "Supervisor Verdict",
+      "type": "string"
+    },
+    "utility": {
+      "title": "Utility",
+      "type": "number"
+    },
+    "rationale": {
+      "additionalProperties": true,
+      "title": "Rationale",
+      "type": "object"
+    },
+    "boundary_after": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Boundary After",
+      "type": "array"
+    }
+  },
+  "required": [
+    "decision_id",
+    "cycle_idx",
+    "snapshot_id",
+    "candidate_id",
+    "risk_tier",
+    "in_boundary",
+    "decision",
+    "supervisor_verdict",
+    "utility"
+  ],
+  "title": "AdaptationDecision",
+  "type": "object"
+}

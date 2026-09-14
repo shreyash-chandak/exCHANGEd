@@ -1,0 +1,160 @@
+{
+  "$defs": {
+    "CellAttribution": {
+      "properties": {
+        "state_key": {
+          "title": "State Key",
+          "type": "string"
+        },
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "delta_p": {
+          "title": "Delta P",
+          "type": "number"
+        },
+        "lesson_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Lesson Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "state_key",
+        "action",
+        "delta_p"
+      ],
+      "title": "CellAttribution",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "prediction_id": {
+      "title": "Prediction Id",
+      "type": "string"
+    },
+    "snapshot_id": {
+      "title": "Snapshot Id",
+      "type": "string"
+    },
+    "candidate_id": {
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "twin_model": {
+      "enum": [
+        "last_value",
+        "trend_t1"
+      ],
+      "title": "Twin Model",
+      "type": "string"
+    },
+    "horizon": {
+      "title": "Horizon",
+      "type": "integer"
+    },
+    "violation_curve_q10": {
+      "items": {
+        "type": "number"
+      },
+      "title": "Violation Curve Q10",
+      "type": "array"
+    },
+    "violation_curve_q50": {
+      "items": {
+        "type": "number"
+      },
+      "title": "Violation Curve Q50",
+      "type": "array"
+    },
+    "violation_curve_q90": {
+      "items": {
+        "type": "number"
+      },
+      "title": "Violation Curve Q90",
+      "type": "array"
+    },
+    "success_q50": {
+      "title": "Success Q50",
+      "type": "number"
+    },
+    "cost_ratio_q50": {
+      "title": "Cost Ratio Q50",
+      "type": "number"
+    },
+    "first_exit_t_q10": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "First Exit T Q10"
+    },
+    "first_exit_t_q50": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "First Exit T Q50"
+    },
+    "first_exit_t_q90": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "First Exit T Q90"
+    },
+    "exit_metric": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Exit Metric"
+    },
+    "contributing_cells": {
+      "items": {
+        "$ref": "#/$defs/CellAttribution"
+      },
+      "title": "Contributing Cells",
+      "type": "array"
+    },
+    "envelope_margin_q50": {
+      "title": "Envelope Margin Q50",
+      "type": "number"
+    }
+  },
+  "required": [
+    "prediction_id",
+    "snapshot_id",
+    "candidate_id",
+    "twin_model",
+    "horizon",
+    "success_q50",
+    "cost_ratio_q50",
+    "envelope_margin_q50"
+  ],
+  "title": "Prediction",
+  "type": "object"
+}

@@ -1,0 +1,246 @@
+{
+  "$defs": {
+    "CanonicalAction": {
+      "description": "Canonical retail action (guide section 2.2).",
+      "enum": [
+        "refund_full",
+        "refund_partial",
+        "exchange",
+        "cancel",
+        "modify",
+        "deny",
+        "escalate",
+        "ask_clarify",
+        "lookup",
+        "end"
+      ],
+      "title": "CanonicalAction",
+      "type": "string"
+    },
+    "CanonicalOutcome": {
+      "description": "Canonical retail outcome (guide section 2.3).",
+      "properties": {
+        "policy_compliant": {
+          "title": "Policy Compliant",
+          "type": "boolean"
+        },
+        "task_success": {
+          "title": "Task Success",
+          "type": "boolean"
+        },
+        "user_satisfied": {
+          "title": "User Satisfied",
+          "type": "boolean"
+        },
+        "cost_delta": {
+          "default": 0.0,
+          "title": "Cost Delta",
+          "type": "number"
+        }
+      },
+      "required": [
+        "policy_compliant",
+        "task_success",
+        "user_satisfied"
+      ],
+      "title": "CanonicalOutcome",
+      "type": "object"
+    },
+    "CanonicalState": {
+      "description": "Canonical retail state (guide section 2.1). Frozen and hashable so it\ncan be used directly as a dict key in addition to via `state_key`.",
+      "properties": {
+        "task_type": {
+          "enum": [
+            "cancel",
+            "return",
+            "exchange",
+            "modify",
+            "lookup",
+            "other"
+          ],
+          "title": "Task Type",
+          "type": "string"
+        },
+        "order_status": {
+          "enum": [
+            "pending",
+            "processed",
+            "delivered",
+            "cancelled",
+            "unknown"
+          ],
+          "title": "Order Status",
+          "type": "string"
+        },
+        "value_bucket": {
+          "enum": [
+            "low",
+            "mid",
+            "high"
+          ],
+          "title": "Value Bucket",
+          "type": "string"
+        },
+        "within_policy_window": {
+          "title": "Within Policy Window",
+          "type": "boolean"
+        },
+        "user_stance": {
+          "enum": [
+            "neutral",
+            "pushy",
+            "distressed"
+          ],
+          "title": "User Stance",
+          "type": "string"
+        },
+        "prior_turns_bucket": {
+          "enum": [
+            "t0",
+            "t1to3",
+            "t4plus"
+          ],
+          "title": "Prior Turns Bucket",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_type",
+        "order_status",
+        "value_bucket",
+        "within_policy_window",
+        "user_stance",
+        "prior_turns_bucket"
+      ],
+      "title": "CanonicalState",
+      "type": "object"
+    },
+    "PolicyEval": {
+      "properties": {
+        "compliant": {
+          "title": "Compliant",
+          "type": "boolean"
+        },
+        "violated_rule_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Violated Rule Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "compliant"
+      ],
+      "title": "PolicyEval",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "record_id": {
+      "title": "Record Id",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "agent_id": {
+      "title": "Agent Id",
+      "type": "string"
+    },
+    "agent_version": {
+      "title": "Agent Version",
+      "type": "integer"
+    },
+    "memory_version": {
+      "title": "Memory Version",
+      "type": "integer"
+    },
+    "episode_id": {
+      "title": "Episode Id",
+      "type": "string"
+    },
+    "turn_idx": {
+      "title": "Turn Idx",
+      "type": "integer"
+    },
+    "t_global": {
+      "title": "T Global",
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/CanonicalState"
+    },
+    "action": {
+      "$ref": "#/$defs/CanonicalAction"
+    },
+    "tools_used": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tools Used",
+      "type": "array"
+    },
+    "outcome": {
+      "$ref": "#/$defs/CanonicalOutcome"
+    },
+    "policy_eval": {
+      "$ref": "#/$defs/PolicyEval"
+    },
+    "reward": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reward"
+    },
+    "latency_ms": {
+      "title": "Latency Ms",
+      "type": "number"
+    },
+    "tokens_in": {
+      "title": "Tokens In",
+      "type": "integer"
+    },
+    "tokens_out": {
+      "title": "Tokens Out",
+      "type": "integer"
+    },
+    "cost_usd": {
+      "title": "Cost Usd",
+      "type": "number"
+    },
+    "lessons_in_context": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Lessons In Context",
+      "type": "array"
+    }
+  },
+  "required": [
+    "run_id",
+    "agent_id",
+    "agent_version",
+    "memory_version",
+    "episode_id",
+    "turn_idx",
+    "t_global",
+    "state",
+    "action",
+    "outcome",
+    "policy_eval",
+    "latency_ms",
+    "tokens_in",
+    "tokens_out",
+    "cost_usd"
+  ],
+  "title": "ExperienceRecord",
+  "type": "object"
+}

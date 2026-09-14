@@ -1,0 +1,69 @@
+{
+  "$defs": {
+    "CellAttribution": {
+      "properties": {
+        "state_key": {
+          "title": "State Key",
+          "type": "string"
+        },
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "delta_p": {
+          "title": "Delta P",
+          "type": "number"
+        },
+        "lesson_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Lesson Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "state_key",
+        "action",
+        "delta_p"
+      ],
+      "title": "CellAttribution",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "jsd_weighted": {
+      "title": "Jsd Weighted",
+      "type": "number"
+    },
+    "jsd_ci_low": {
+      "title": "Jsd Ci Low",
+      "type": "number"
+    },
+    "jsd_ci_high": {
+      "title": "Jsd Ci High",
+      "type": "number"
+    },
+    "per_state_jsd": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Per State Jsd",
+      "type": "object"
+    },
+    "top_cells": {
+      "items": {
+        "$ref": "#/$defs/CellAttribution"
+      },
+      "title": "Top Cells",
+      "type": "array"
+    }
+  },
+  "required": [
+    "jsd_weighted",
+    "jsd_ci_low",
+    "jsd_ci_high"
+  ],
+  "title": "DriftScore",
+  "type": "object"
+}

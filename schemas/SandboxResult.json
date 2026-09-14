@@ -1,0 +1,70 @@
+{
+  "properties": {
+    "sandbox_id": {
+      "title": "Sandbox Id",
+      "type": "string"
+    },
+    "candidate_id": {
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "case_set_id": {
+      "title": "Case Set Id",
+      "type": "string"
+    },
+    "n_trials": {
+      "title": "N Trials",
+      "type": "integer"
+    },
+    "task_success": {
+      "title": "Task Success",
+      "type": "number"
+    },
+    "violation_rate": {
+      "title": "Violation Rate",
+      "type": "number"
+    },
+    "satisfaction_rate": {
+      "title": "Satisfaction Rate",
+      "type": "number"
+    },
+    "mean_latency_ms": {
+      "title": "Mean Latency Ms",
+      "type": "number"
+    },
+    "mean_cost": {
+      "title": "Mean Cost",
+      "type": "number"
+    },
+    "p_action": {
+      "additionalProperties": {
+        "additionalProperties": {
+          "type": "number"
+        },
+        "type": "object"
+      },
+      "title": "P Action",
+      "type": "object"
+    },
+    "coverage": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Coverage",
+      "type": "array"
+    }
+  },
+  "required": [
+    "sandbox_id",
+    "candidate_id",
+    "case_set_id",
+    "n_trials",
+    "task_success",
+    "violation_rate",
+    "satisfaction_rate",
+    "mean_latency_ms",
+    "mean_cost"
+  ],
+  "title": "SandboxResult",
+  "type": "object"
+}

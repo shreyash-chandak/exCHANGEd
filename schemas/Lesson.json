@@ -1,0 +1,57 @@
+{
+  "properties": {
+    "lesson_id": {
+      "title": "Lesson Id",
+      "type": "string"
+    },
+    "text": {
+      "title": "Text",
+      "type": "string"
+    },
+    "created_t": {
+      "title": "Created T",
+      "type": "integer"
+    },
+    "source_episode_id": {
+      "title": "Source Episode Id",
+      "type": "string"
+    },
+    "condition_state_key": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Condition State Key"
+    },
+    "prescribed_action": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Prescribed Action"
+    },
+    "generosity": {
+      "default": 0.0,
+      "title": "Generosity",
+      "type": "number"
+    }
+  },
+  "required": [
+    "lesson_id",
+    "text",
+    "created_t",
+    "source_episode_id"
+  ],
+  "title": "Lesson",
+  "type": "object"
+}

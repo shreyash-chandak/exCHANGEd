@@ -1,0 +1,20 @@
+{
+  "properties": {
+    "compliant": {
+      "title": "Compliant",
+      "type": "boolean"
+    },
+    "violated_rule_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Violated Rule Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "compliant"
+  ],
+  "title": "PolicyEval",
+  "type": "object"
+}
