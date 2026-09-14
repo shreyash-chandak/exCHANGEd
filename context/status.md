@@ -11,8 +11,9 @@ repo, since `context/` already held the planning docs. Branch `shreyash`.
 
 ## Where things stand
 
-**Phases 0-3 done and tagged** (`phase-0-done` .. `phase-3-done`). `make test`
-(`uv run pytest -q -m "not live"`) is green: 1385 passed, 2 xfailed.
+**Phases 0, 1, 2, 3, 5, 6 done and tagged** (`phase-0-done` .. `phase-3-done`,
+`phase-5-done`, `phase-6-done`; phase 4 skipped for now, see below). `make test`
+(`uv run pytest -q -m "not live"`) is green: 1402 passed, 3 xfailed.
 
 - **Phase 0** (bootstrap): repo layout, `uv` + Python 3.12 pinned, Makefile, ruff, smoke test.
 - **Phase 1** (tau2 discovery, STOP): `vendor/tau2-bench` submodule pinned to `v1.0.1`.
@@ -28,13 +29,26 @@ repo, since `context/` already held the planning docs. Branch `shreyash`.
   `change/store.py` (JsonlStore). Fully tested, schemas exported to `schemas/`.
 - **Phase 3** (mock environment): `envs/mock/{mock_env,mock_agent}.py`,
   `change/memory.py` (LessonMemory), `change/generate.py` (MockLessonExtractor),
-  `scripts/run_episodes.py`. **Found two more structural issues** in the guide's own
+  `scripts/run_episodes.py`. **Found two structural issues** in the guide's own
   mock-env drift design (D2's generosity mechanism has a hard mathematical ceiling
   ~8.5 points short of the required +10 point drift threshold; D3's policy-update
   test is unreliable given how `truth`-feedback lessons get generosity-tagged) —
   both proven with real measurements, not just modeling, and documented in
   `docs/checkpoints/phase-3.md` with 5 concrete options. The two blocked assertions
   are marked `xfail(strict=True)` so the suite stays green but the gap stays loud.
+- **Phase 5** (Contextualize): `change/contextualize.py` (`build_snapshot`,
+  `weighted_jsd`, `drift_score` with episode-level bootstrap CI and lesson
+  attribution, `Snapshotter`). Fixed a genuine contradiction between guide 3.2's
+  ground-truth compliance rule and its expected-action table (see phase-3 checkpoint
+  item 1). One D2 assertion is `xfail` — same root cause as phase 3's D2 finding,
+  now also shown to degrade Contextualize's own monotonicity test via noisy small
+  windows. D1 passes cleanly. `docs/checkpoints/phase-5.md`.
+- **Phase 6** (Anticipate): `change/anticipate/{trend,simulator,envelope,counterfactual}.py`
+  (T1 weighted-least-squares trend model + LastValue baseline, vectorized Markov
+  simulator, envelope/time-to-exit, counterfactual patching/ranking),
+  `scripts/run_anticipate.py`. All tests pass (T1 beats LastValue on the D2 forecast
+  test, but only marginally — same weak-signal root cause). No new open questions.
+  `docs/checkpoints/phase-6.md` has the full forecast-vs-realized numbers.
 
 ## Open questions blocking further progress (owner decisions needed)
 
@@ -50,14 +64,18 @@ From `docs/checkpoints/phase-1.md` (blocks **phase 4**, tau2 adapter):
    import time (no vendor file edits) for phase 4?
 
 From `docs/checkpoints/phase-3.md` (does **not** block further mock-env-only work,
-but the D2/D3 sanity-gate story in the paper depends on it):
+but the D2/D3 sanity-gate story in the paper depends on it, and now also affects
+phase 5's monotonicity test and phase 6's forecast-quality numbers):
 4. Which fix for the D2/D3 drift thresholds — loosen thresholds, change the sigmoid
    formula/clip bound, raise the eligible-state fraction, switch D3 to
    `satisfaction` feedback, or accept as documented limitations of the mock (real
    tau2 D2 gate in phase 4 would be the actual empirical validation)?
 
-None of these block **phases 5-6** (Contextualize, Anticipate), which only need the
-mock env (already built) — recommended next step if the owner hasn't answered yet.
+None of these block **phase 7** (Generate/Sandbox/Negotiate/Evolve/loop) mechanically
+— it only needs the mock env, already built — but the loop's headline comparison
+(does governance reduce violations vs. A0) will read a lot more convincingly once
+question 4 is resolved, since the underlying drift signal it's governing is
+currently weak. Recommend settling questions 1-4 before or alongside phase 7.
 
 ## Environment notes for next session
 
@@ -72,12 +90,20 @@ mock env (already built) — recommended next step if the owner hasn't answered 
 - `pytest` is scoped to `testpaths = ["tests"]` in `pyproject.toml` — without this it
   collects `vendor/tau2-bench`'s own test suite and errors on missing extras
   (voice/gym/knowledge). Don't remove this.
-- Zero LLM spend so far — everything through phase 3 runs offline against the mock
+- Zero LLM spend so far — everything through phase 6 runs offline against the mock
   env. Phase 4 is the first LIVE-gated phase (needs `CHANGE_LIVE=1` + explicit
   budget approval per `CHANGE_poc_agent_guide.md` section 0.2/4).
+- The 2000x2000 simulator timing test (`test_simulator.py::test_runtime_under_30_seconds`)
+  runs in ~11-12s on this machine — comfortably under the guide's 30s hard limit but
+  over its "under 10s" soft target. Not worth optimizing further unless it becomes
+  a bottleneck in phase 8's experiment grid.
 
 ## Next step
 
-Waiting on owner answers to the open questions above. In the meantime, the
-unblocked path is **Phase 5 (Contextualize)** and **Phase 6 (Anticipate)** against
-the mock env — `docs/checkpoints/phase-3.md`'s "Next" section recommends this order.
+Two parallel options, not mutually exclusive:
+1. Get owner answers to the 4 open questions above (phase 1 + phase 3/5 findings).
+2. Continue unblocked implementation: **Phase 7** (`change/generate.py`'s
+   `CandidateGenerator`, `change/sandbox.py`, `change/negotiate.py`,
+   `change/evolve.py`, `change/loop.py`, `scripts/run_loop.py`) — the biggest
+   remaining phase, ties Generate/Sandbox/Negotiate/Evolve into the A0-FULL
+   governance loop comparison. Still entirely mock-env-based, no LLM spend.
