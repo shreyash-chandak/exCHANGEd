@@ -31,6 +31,7 @@ target-version = "py312"
 extend-exclude = ["context/", "docs/", "vendor/"]
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 markers = [
     "live: marks tests that call real models or the live tau2 environment (deselect with '-m \"not live\"')",
 ]
