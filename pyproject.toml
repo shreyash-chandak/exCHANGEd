@@ -1,0 +1,41 @@
+[project]
+name = "change-poc"
+version = "0.1.0"
+description = "CHANGE governance loop PoC: predictive behavioral governance for a self-evolving tau2-bench retail agent"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "pydantic>=2",
+    "numpy",
+    "scipy",
+    "pandas",
+    "matplotlib",
+    "litellm",
+    "python-dotenv",
+    "typer",
+    "orjson",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "hypothesis",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+markers = [
+    "live: marks tests that call real models or the live tau2 environment (deselect with '-m \"not live\"')",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+include = ["change/", "envs/"]
