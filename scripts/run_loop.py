@@ -5,21 +5,11 @@ from __future__ import annotations
 
 import typer
 
+from change.experiment import CONDITIONS, default_agent_factory
 from change.loop import GovernanceLoop
-from envs.mock.mock_agent import MockAgent
 from envs.mock.mock_env import MockRetailEnv
 
 app = typer.Typer(add_completion=False)
-
-_CONDITIONS = {
-    "d1": {"feedback": "truth", "policy_update_at_t": None},
-    "d2": {"feedback": "satisfaction", "policy_update_at_t": None},
-    "d3": {"feedback": "truth", "policy_update_at_t": 300},
-}
-
-
-def _agent_factory(memory, gates, rng):
-    return MockAgent(memory=memory, rng=rng, gates=gates)
 
 
 @app.command()
@@ -35,16 +25,16 @@ def main(
 ) -> None:
     if env != "mock":
         raise typer.BadParameter("only --env mock is implemented")
-    if condition not in _CONDITIONS:
-        raise typer.BadParameter(f"condition must be one of {list(_CONDITIONS)}")
+    if condition not in CONDITIONS:
+        raise typer.BadParameter(f"condition must be one of {list(CONDITIONS)}")
 
-    cond = _CONDITIONS[condition]
+    cond = CONDITIONS[condition]
     mock_env = MockRetailEnv(
         n_tasks=n_tasks, seed=seed, run_id=run_id, policy_update_at_t=cond["policy_update_at_t"]
     )
     loop = GovernanceLoop(
         mock_env,
-        _agent_factory,
+        default_agent_factory,
         system=system,
         drift_condition={"feedback": cond["feedback"]},
         seed=seed,
