@@ -35,3 +35,9 @@ Same as phase 3 — the D2/D3 mechanism-tuning decision (`docs/checkpoints/phase
 
 ## Next
 Phase 6: Anticipate (`change/anticipate/{trend,simulator,envelope,counterfactual}.py`). Works on `BehavioralSnapshot` sequences built by this phase; does not depend on the phase-1 tau2 mapping questions and is not expected to depend further on the D2 magnitude question either (T1 trend-fitting and the Markov simulator should work correctly regardless of how strong the underlying drift signal is — weak drift just means a longer/less certain time-to-exit forecast, which is itself a valid and reportable outcome).
+
+## Revision (owner-authorized, this session)
+
+**`Snapshotter` simplified to window-count only** — the memory-version-delta-10 trigger documented above (deviation 1) is removed entirely, matching what `change/loop.py` was already doing by bypassing it (`docs/checkpoints/phase-7.md` deviation 1). `change/loop.py` now uses `Snapshotter` directly again instead of its own hand-rolled window loop, since the two mechanisms are identical once the dual trigger is gone. `test_snapshotter_emits_on_window_and_on_memory_version_jump` renamed to `test_snapshotter_emits_every_window_episodes` and rewritten to assert a memory-version jump does *not* cause early emission.
+
+The phase-3 population fix (see `docs/checkpoints/phase-3.md` "Revision") raised D2's ceiling well past the guide's threshold but also made the underlying drift saturate within ~10-25 episodes rather than ramping across 500 — so `test_d2_violation_rate_trends_up_and_last_snapshot_attributes_it` remains `xfail(strict)`, now because 50-episode windows are already at the noisy plateau by the first window, not because the signal is too weak to detect at all. See the test's updated `xfail` reason and `docs/checkpoints/phase-3.md`.

@@ -52,3 +52,7 @@ None new. Same as phases 3/5 (D2/D3 mechanism tuning) — expected to improve th
 
 ## Next
 Phase 7: Generate (CandidateGenerator), Sandbox, Negotiate, Evolve, and the governance loop tying A0-FULL together. Also not blocked by the phase-1 tau2 questions (mock env only) or the phase-3/5 D2 tuning question, though the loop's qualitative story (does governance actually reduce violations vs. A0) will be more convincing once that's resolved.
+
+## Revision (owner-authorized, this session)
+
+**Envelope baseline is now the mean over the first 3 windows of a run, fixed thereafter** — not just the cutoff/first window's own (noisy) values, addressing the "Envelope baseline source" limitation noted above. Implemented in `change/loop.py::GovernanceLoop._update_envelope`. This is a real improvement (a 3-window mean is materially less noisy than a 1-window estimate) but also, downstream in phase 7's Evolve gate, exposed a new dynamic once the phase-3 population fix made drift genuinely stronger: a baseline frozen *before* drift sets in can end up meaningfully higher than what's achievable *during* drift, even after a correct partial fix — see `docs/checkpoints/phase-7.md` "Revision" for the resulting finding in `test_full_reduces_cumulative_violations_vs_a0_on_d2`.

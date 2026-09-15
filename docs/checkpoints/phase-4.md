@@ -20,3 +20,7 @@ See the consolidated list at the end of this session's summary (also `context/st
 
 ## Next
 Once the owner answers the above: `envs/tau2/retail_canonical.py` (canonicalization functions using the confirmed tool mapping), `envs/tau2/lesson_agent.py` (memory injection + gate support), `envs/tau2/adapter.py` (`Tau2RetailEnv`), `change/generate.py`'s `LiveLessonExtractor`, then the LIVE smoke test (5 retail episodes, `CHANGE_LIVE=1`, owner inspects). Everything downstream of phase 4 (a real `envs.tau2` `Env` implementation) is otherwise a drop-in replacement for `MockRetailEnv` in `GovernanceLoop`/`scripts/run_loop.py`/`scripts/run_grid.py` — no other phase's code should need to change.
+
+## Revision (owner-authorized, this session)
+
+Question 3 above is answered: **register the `LessonAgent` factory into `tau2.registry.registry` at import time from `envs/tau2/lesson_agent.py`, no vendor file edits.** Recorded here for when phase 4 actually starts — not yet actionable, since questions 1/2/4 above remain open and phase 4 is still blocked on them.
