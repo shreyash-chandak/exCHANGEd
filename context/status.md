@@ -7,6 +7,18 @@ supplied `context/CHANGE_poc_agent_guide-2.md` (session-2 guide, wins on conflic
 session 1) which restated those decisions with an exact spec and added phase 4.0-4d.
 **Phase 4.0 of the session-2 guide is now complete and tagged `phase-4.0-done`.**
 
+**Post-tag verification-gate recalibration** (owner asked to dig into the grid's
+FULL-underperforms-A0 finding before moving on): two real small-sample measurement
+bugs found and fixed in `negotiate.py`/`evolve.py`/`counterfactual.py` (statistical
+tolerance margins on point-estimate comparisons; generalized counterfactual patch
+coverage). Both verified real but second-order — `test_full_reduces_cumulative_violations_vs_a0_on_d2`'s
+numbers didn't change, because the deeper cause turned out to be that a single-cycle
+G1 candidate genuinely isn't strong enough against this drift's engineered severity,
+which Negotiate/Evolve correctly decline to accept rather than a bug. Full writeup in
+`docs/checkpoints/phase-8b.md` "Verification-gate recalibration". Owner's call after
+seeing this was to proceed to phase 4.1 rather than pursue further (multi-cycle
+credit / stronger candidates) for now.
+
 ## What this is
 
 Implementation of the CHANGE governance-loop PoC per `context/CHANGE_poc_agent_guide.md`
@@ -89,11 +101,17 @@ tagged `phase-4.0-done`.** Next up per the session-2 guide's own ordering: phase
 5. **D2/D3/Contextualize-D2 magnitude tests remain `xfail`** (see finding 1 above) —
    session-2 guide 4.0.3 explicitly said not to tune further if still failing after the
    population fix, so left as a reported, unresolved finding.
-6. **The A0-A2-vs-A3-A4-FULL cumulative-violations pattern** (finding 3 above) and
-   **A1/A2's threshold miscalibrations** (finding 4 above) are documented but not
-   fixed — `DRIFT_ALERT_JSD`, `LEAD_TIME_TRIGGER`, `supervisor_oracle`'s comparison,
-   and `ENVELOPE_VIOLATION_MAX`/`ENVELOPE_SUCCESS_DROP_MAX` are all guide-specified and
-   left as-is pending owner input.
+6. **The A0-A2-vs-A3-A4-FULL cumulative-violations pattern** (finding 3 above): two
+   real small-sample measurement bugs in `supervisor_oracle`/Evolve's canary check and
+   counterfactual patch coverage were found and fixed (`phase-8b.md` "Verification-gate
+   recalibration"), verified real, but second-order — the pattern persists because a
+   single-cycle G1 candidate genuinely isn't strong enough against this drift's
+   engineered severity, which Negotiate/Evolve correctly decline to accept. Not a bug
+   at this point; whether to give multi-cycle credit or strengthen the candidate is a
+   real design decision, not made unilaterally.
+7. **A1/A2's threshold miscalibrations** (finding 4 above) are still documented but not
+   fixed — `DRIFT_ALERT_JSD` and `LEAD_TIME_TRIGGER` are guide-specified and left as-is
+   pending owner input.
 
 ## Consolidated open questions for the owner
 
@@ -112,9 +130,11 @@ three remain:**
 **From this session's grid findings, needing a decision before phase 8's table is
 paper-ready:**
 4. Window definition for the D2/D3/Contextualize-D2 magnitude tests (finding 1)?
-5. Is the A0/A2-beats-A3/A4/FULL pattern (finding 3) an acceptable PoC-level result, or
-   does `supervisor_oracle`/Evolve's canary policy need a design change (larger canary
-   sample, multi-cycle credit, different comparison)?
+5. Now that the A0/A2-beats-A3/A4/FULL pattern is understood to be a genuine
+   "single-cycle candidate too weak" limitation rather than a measurement bug (finding
+   6/`phase-8b.md`) — is that an acceptable PoC-level result, or does it warrant giving
+   Negotiate/Evolve multi-cycle credit for improving-but-not-yet-sufficient candidates,
+   or strengthening G1's corrective candidate design?
 6. Should A1's `DRIFT_ALERT_JSD` trigger or A2's `LEAD_TIME_TRIGGER` be revisited given
    they're now measurably miscalibrated (never-fires / always-fires) under the
    corrected population (finding 4)?
