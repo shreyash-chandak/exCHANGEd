@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 import random
+import zlib
 from pathlib import Path
 from uuid import uuid4
 
@@ -23,7 +24,7 @@ from change.config import (
     SIM_TRAJECTORIES,
     WINDOW_EPISODES,
 )
-from change.contextualize import build_snapshot
+from change.contextualize import Snapshotter
 from change.contracts import (
     AdaptationDecision,
     AgentVersion,
@@ -45,7 +46,15 @@ SYSTEMS = ("A0", "A1", "A2", "A3", "A4", "FULL")
 
 
 def _seeded_rng(seed: int, cycle_idx: int, tag: str) -> np.random.Generator:
-    return np.random.default_rng([seed, cycle_idx, abs(hash(tag)) % (2**31 - 1)])
+    """Bug fix (docs/checkpoints/phase-7.md "Revision" section): Python's
+    built-in hash() is randomized per-process for str (PEP 456) unless
+    PYTHONHASHSEED is pinned in the environment, which it isn't here -- so
+    the old `hash(tag)` (tag is often a fresh, unseeded uuid4() candidate_id)
+    made simulate()'s forecasting RNG silently non-reproducible across runs
+    of the same `seed`, even though every other seeded component (episode
+    seeding, TaskSplit) was correctly deterministic. zlib.crc32 is a stable,
+    process-independent hash."""
+    return np.random.default_rng([seed, cycle_idx, zlib.crc32(tag.encode())])
 
 
 def _do_nothing_candidate() -> Candidate:
@@ -100,6 +109,7 @@ class GovernanceLoop:
 
         run_dir = Path(runs_dir) / run_id
         self.store = JsonlStore(run_dir)
+        self.snapshotter = Snapshotter(self.store, window=WINDOW_EPISODES)
         self.extractor = MockLessonExtractor(feedback=self.feedback)
         self.generator = CandidateGenerator(mode="mock")
         self.sandbox = Sandbox(run_id, runs_dir)
@@ -115,8 +125,7 @@ class GovernanceLoop:
         self.agent_version = 1
         self._episode_counter = 0
         self.cycle_idx = 0
-        self._parent_snapshot: BehavioralSnapshot | None = None
-        self._parent_records: list = []
+        self._baseline_snapshots: list[BehavioralSnapshot] = []
 
         self.store.append(
             AgentVersion(
@@ -146,12 +155,7 @@ class GovernanceLoop:
         snapshot = self._run_episodes_until_snapshot()
         drift = snapshot.drift_vs_parent
         self.snapshot_history.append(snapshot)
-
-        if self.envelope is None:
-            self.envelope = Envelope(
-                baseline_success=snapshot.success_rate, baseline_cost=snapshot.mean_cost
-            )
-            self.baseline_latency = snapshot.mean_latency_ms
+        self._update_envelope(snapshot)
 
         do_nothing_predictions = self._predict_do_nothing(snapshot)
         trend_pred = do_nothing_predictions["trend_t1"]
@@ -177,54 +181,49 @@ class GovernanceLoop:
         return result
 
     def _run_episodes_until_snapshot(self) -> BehavioralSnapshot:
-        """Runs exactly WINDOW_EPISODES full episodes and builds one snapshot
-        from all of their records directly via build_snapshot.
-
-        Deviation from a literal reading of "feeding records to Snapshotter":
-        Snapshotter's own dual trigger (window OR memory_version delta >= 10)
-        emits far more often than every 50 episodes once a lesson extractor
-        is attached, the same finding already documented in
-        docs/checkpoints/phase-5.md. Windows of ~15-20 records are noisy
-        enough that even flat (D1) behavior spuriously crosses
-        ENVELOPE_VIOLATION_MAX by chance sometimes, which would break "A0 on
-        d1 produces zero adaptations" (guide 7.7) for reasons unrelated to
-        A0's own logic. Using a fixed 50-episode window here (same fix
-        already applied in test_contextualize.py) keeps "a cycle is one
-        snapshot window" true while giving stable-enough estimates. See
-        docs/checkpoints/phase-7.md.
-        """
-        episode_ids: list[str] = []
-        by_episode: dict[str, list] = {}
-
-        for _ in range(WINDOW_EPISODES):
+        """Runs full episodes, feeding records to self.snapshotter, until it
+        emits one (i.e. exactly WINDOW_EPISODES episodes now that
+        Snapshotter is window-only -- see docs/checkpoints/phase-5.md)."""
+        while True:
             task_id = self.split.train[self._episode_counter % len(self.split.train)]
             episode_seed = self.seed * 1_000_003 + self._episode_counter
             result = self.env.run_episode(task_id, self.agent, episode_seed)
             self._episode_counter += 1
 
-            episode_id = result.records[0].episode_id
-            episode_ids.append(episode_id)
-            by_episode[episode_id] = result.records
+            snapshot = None
             for record in result.records:
                 self.store.append(record)
+                emitted = self.snapshotter.consume(record)
+                if emitted is not None:
+                    snapshot = emitted
 
             for lesson in self.extractor.extract(
-                result.records, episode_id=episode_id, t_global=self.env.t_global
+                result.records,
+                episode_id=result.records[0].episode_id,
+                t_global=self.env.t_global,
             ):
                 self.memory.add(lesson)
 
-        all_records = [r for eid in episode_ids for r in by_episode[eid]]
-        snapshot = build_snapshot(
-            all_records,
-            parent=self._parent_snapshot,
-            run_id=self.run_id,
-            snapshot_id=f"{self.run_id}-cycle{self.cycle_idx}",
-            parent_records=self._parent_records,
+            if snapshot is not None:
+                return snapshot
+
+    def _update_envelope(self, snapshot: BehavioralSnapshot) -> None:
+        """Owner-authorized revision (docs/checkpoints/phase-6.md "Revision"
+        section): baseline_success/baseline_cost/baseline_latency are the
+        mean over the first 3 windows of the run, then fixed -- not just the
+        first window's own (noisy) values."""
+        if len(self._baseline_snapshots) < 3:
+            self._baseline_snapshots.append(snapshot)
+        baseline_success = sum(s.success_rate for s in self._baseline_snapshots) / len(
+            self._baseline_snapshots
         )
-        self.store.append(snapshot)
-        self._parent_snapshot = snapshot
-        self._parent_records = all_records
-        return snapshot
+        baseline_cost = sum(s.mean_cost for s in self._baseline_snapshots) / len(
+            self._baseline_snapshots
+        )
+        self.baseline_latency = sum(s.mean_latency_ms for s in self._baseline_snapshots) / len(
+            self._baseline_snapshots
+        )
+        self.envelope = Envelope(baseline_success=baseline_success, baseline_cost=baseline_cost)
 
     def _predict_do_nothing(self, snapshot: BehavioralSnapshot) -> dict[str, Prediction]:
         predictions = {}

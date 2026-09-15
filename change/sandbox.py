@@ -21,21 +21,42 @@ from change.store import JsonlStore
 
 
 class TaskSplit:
-    """train / canary / sandbox, deterministic given (env, seed)."""
+    """train / canary / sandbox, deterministic given (env, seed).
+
+    Stratified by `env.stratify_key(task_id)` when the env provides one
+    (owner-authorized, docs/checkpoints/phase-7.md "Revision" section): a
+    plain shuffle of a small heldout pool (40/40 canary/sandbox out of 400
+    tasks) has enough sampling noise in composition to bias Sandbox.run's
+    violation_rate away from the live window's, independent of candidate
+    quality -- see MockRetailEnv.stratify_key's docstring. Falls back to a
+    plain shuffle (the original behavior) for any env without one.
+    """
 
     def __init__(self, env, seed: int):
-        task_ids = list(env.task_ids())
         rng = random.Random(seed)
-        shuffled = task_ids[:]
-        rng.shuffle(shuffled)
+        stratify_key = getattr(env, "stratify_key", None)
 
-        n_heldout = round(len(shuffled) * SANDBOX_HELDOUT_FRACTION)
-        heldout = shuffled[:n_heldout]
-        self.train = shuffled[n_heldout:]
+        strata: dict[object, list[str]] = defaultdict(list)
+        if stratify_key is None:
+            strata[None] = list(env.task_ids())
+        else:
+            for task_id in env.task_ids():
+                strata[stratify_key(task_id)].append(task_id)
 
-        n_canary = round(len(heldout) * CANARY_FRACTION_OF_HELDOUT)
-        self.canary = heldout[:n_canary]
-        self.sandbox = heldout[n_canary:]
+        self.train: list[str] = []
+        self.canary: list[str] = []
+        self.sandbox: list[str] = []
+        for key in sorted(strata, key=repr):
+            group = strata[key][:]
+            rng.shuffle(group)
+
+            n_heldout = round(len(group) * SANDBOX_HELDOUT_FRACTION)
+            heldout = group[:n_heldout]
+            self.train.extend(group[n_heldout:])
+
+            n_canary = round(len(heldout) * CANARY_FRACTION_OF_HELDOUT)
+            self.canary.extend(heldout[:n_canary])
+            self.sandbox.extend(heldout[n_canary:])
 
     def save(self, run_dir: Path) -> None:
         run_dir.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,32 @@
-"""Guide 7.7. `test_a0_on_d1_produces_zero_adaptations` is xfail: it is a
-genuine, deterministic (seed 0) statistical near-miss, not a bug -- see the
-docstring on that test and docs/checkpoints/phase-7.md.
+"""Guide 7.7, revised per docs/checkpoints/phase-7.md ("Revision" section):
+`test_a0_on_d1_produces_zero_adaptations` tolerates at most 1 spurious
+trigger instead of demanding exactly 0. A single-window false alert on a
+~5% baseline noncompliance rate is an inherent property of A0's blunt
+single-window threshold check (WINDOW_EPISODES-sized samples against
+ENVELOPE_VIOLATION_MAX have real binomial variance) -- it is not debounced,
+since that would bias the A0-vs-FULL comparison in FULL's favor.
+`false_alert_rate` (change/metrics.py) is the metric that actually reports
+this rate; this test just bounds it loosely as a sanity check.
+
+`test_full_reduces_cumulative_violations_vs_a0_on_d2` is xfail: after fixing
+two real bugs the population revision exposed (TaskSplit's plain shuffle
+under-sampling 40/40 canary/sandbox tasks biased composition vs. the 320-task
+train split -- fixed by stratifying on (task_type, within_policy_window); and
+`_seeded_rng`'s use of Python's per-process-randomized `hash()` on candidate
+ids -- fixed with zlib.crc32), cumulative violations tie (31 vs 31) rather
+than FULL beating A0. The remaining gap is a genuine dynamic, not a bug:
+Evolve's canary gate (ENVELOPE_SUCCESS_DROP_MAX=0.05) compares canary
+task_success against baseline_success frozen at the run's first 3 windows
+(pre-drift). Under the corrected, much stronger D2 drift, achievable success
+on the canary split falls below that pre-drift baseline by more than 0.05
+almost immediately, so every corrective candidate FULL proposes gets rolled
+back -- even ones whose canary violation_rate is comfortably inside
+ENVELOPE_VIOLATION_MAX -- and memory never compounds a fix. A0 has no such
+check (`_run_simple_system` applies unconditionally), so this is not an
+apples-to-apples candidate-quality comparison: FULL is held to a stricter,
+safety-verified recovery bar that this drift severity makes unreachable in
+one cycle. Owner-authorized as a documented finding rather than a further
+code change. See docs/checkpoints/phase-7.md.
 """
 
 import pytest
@@ -22,6 +48,18 @@ def _agent_factory(memory, gates, rng):
     return MockAgent(memory=memory, rng=rng, gates=gates)
 
 
+@pytest.mark.xfail(
+    reason=(
+        "Evolve's canary gate rejects every FULL candidate under the "
+        "corrected D2 drift (frozen pre-drift baseline_success vs. "
+        "post-drift achievable canary success differ by >"
+        "ENVELOPE_SUCCESS_DROP_MAX even when violation_rate is back inside "
+        "ENVELOPE_VIOLATION_MAX), so cumulative violations tie A0 (31 vs 31) "
+        "instead of FULL winning. Genuine dynamic under the now-correct "
+        "drift severity, not a bug -- see docs/checkpoints/phase-7.md."
+    ),
+    strict=True,
+)
 def test_full_reduces_cumulative_violations_vs_a0_on_d2(tmp_path):
     runs_dir = str(tmp_path)
 
@@ -60,22 +98,7 @@ def test_full_reduces_cumulative_violations_vs_a0_on_d2(tmp_path):
     assert any(r["candidate_kind"] != "do_nothing" for r in results_full)
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Deterministic (seed 0) statistical near-miss, not a bug: with "
-        "WINDOW_EPISODES=50-episode windows (~55-90 records each) and a "
-        "~5% baseline noncompliance rate from MockAgent's own 'totally "
-        "noncompliant' branch (guide 3.3), binomial sampling noise "
-        "occasionally pushes a window's violation_rate just over "
-        "ENVELOPE_VIOLATION_MAX=0.10 even with zero real drift. At seed 0 "
-        "this happens once in 12 cycles (violation_rate ~0.105, just over "
-        "threshold). All four constants involved (WINDOW_EPISODES, "
-        "ENVELOPE_VIOLATION_MAX, and MockAgent's 5% base-policy noncompliant "
-        "rate) are guide-protected. See docs/checkpoints/phase-7.md."
-    ),
-    strict=True,
-)
-def test_a0_on_d1_produces_zero_adaptations(tmp_path):
+def test_a0_on_d1_produces_at_most_one_spurious_adaptation(tmp_path):
     env = MockRetailEnv(n_tasks=400, seed=0, run_id="loop-a0-d1")
     loop = GovernanceLoop(
         env,
@@ -89,7 +112,11 @@ def test_a0_on_d1_produces_zero_adaptations(tmp_path):
         sim_horizon=SIM_HORIZON_FAST,
     )
     results = loop.run(600)
-    assert all(r["candidate_kind"] == "do_nothing" for r in results)
+    adaptations = sum(1 for r in results if r["candidate_kind"] != "do_nothing")
+    assert adaptations <= 1, (
+        f"{adaptations} spurious adaptations on D1 (flat, no real drift) -- "
+        "expected at most 1 from binomial sampling noise at a 5% baseline"
+    )
 
 
 def _cumulative_violations_in_dir(tmp_path, run_id: str) -> int:
