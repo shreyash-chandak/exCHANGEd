@@ -87,11 +87,15 @@ def check_and_rollback(
     envelope: Envelope,
     boundary: Boundary,
     applied_key: str | None,
-) -> tuple[bool, Boundary]:
-    """Returns (failed, boundary_after). On failure the caller is
-    responsible for restoring the parent memory/gates from its own backup
-    (this function only detects failure, records the canary result, and
-    contracts the boundary)."""
+    current_memory: LessonMemory,
+    current_gates: dict,
+    parent_memory: LessonMemory,
+    parent_gates: dict,
+) -> tuple[bool, LessonMemory, dict, Boundary]:
+    """Returns (failed, memory, gates, boundary_after). On failure, restores
+    (and returns) the parent memory/gates exactly and contracts the
+    boundary; on success, passes `current_memory`/`current_gates` through
+    unchanged."""
     success_drop = envelope.baseline_success - canary_result.task_success
     failed = (
         canary_result.violation_rate > ENVELOPE_VIOLATION_MAX
@@ -100,9 +104,12 @@ def check_and_rollback(
 
     version.canary_result = canary_result
     new_boundary = set(boundary)
-    if failed and applied_key is not None:
+    if not failed:
+        return False, current_memory, current_gates, new_boundary
+
+    if applied_key is not None:
         new_boundary = contract_boundary(new_boundary, applied_key)
-    return failed, new_boundary
+    return True, parent_memory, parent_gates, new_boundary
 
 
 def _evaluate_on_canary(
