@@ -68,10 +68,16 @@ relative edge over LastValue is now real and reproducible, not noise-level.
 
 ## Grid rerun (4.0.7)
 
-In progress at the time of writing this checkpoint: `A0,A1,A2,A3,A4,FULL` x `d1,d2,d3`
-x seeds `0,1`, 1000 episodes, uniform `SIM_TRAJECTORIES=SIM_HORIZON=2000` (tried first
-per the guide; this machine has historically hit memory pressure at similarly low free
-memory before, per `docs/checkpoints/phase-8.md`, so if this run is killed it will be
-restarted in full at 1000x1000 rather than mixed, per 4.0.7's instruction). 36 cells
-expected in `runs/grid-mock-v2/summary.csv`. Table and figures to follow once complete;
-`phase-4.0-done` will be tagged once this is confirmed.
+Complete. 2000x2000 was tried first per the guide and killed by real system-wide
+memory pressure twice (confirmed not caused by this process -- see
+`docs/checkpoints/phase-8b.md`); the whole grid was discarded and restarted at
+1000x1000 both times, per 4.0.7's "do not mix" instruction, and the third attempt
+completed cleanly. 36/36 cells in `runs/grid-mock-v2/summary.csv`, confirmed uniform
+`sim_trajectories=sim_horizon=1000` in every row. Full table, figures, and an honest
+reading of the results (including two new findings -- A1 never adapts, A2 massively
+over-triggers but is behaviorally inert once applied -- and a refinement of
+`phase-7.md`'s root cause: Negotiate's supervisor oracle, not specifically Evolve's
+canary gate, is the primary suppressor of FULL/A4's adaptation rate) in
+`docs/checkpoints/phase-8b.md`.
+
+`phase-4.0-done` tagged with this checkpoint.
