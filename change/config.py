@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     live: bool = False
     runs_dir: str = "runs"
 
+    # ---- session-2 guide 4.1.4: local model serving ----
+    llm_base_url: str = "http://127.0.0.1:8080/v1"
+    llm_model: str | None = None
+    llm_concurrency: int = 6
+
     # ---- section 2.4: numeric constants ----
     window_episodes: int = 50
     min_cell_count: int = 20
@@ -82,3 +87,6 @@ MEMORY_CAP = settings.memory_cap
 UTILITY_LAMBDA_COST = settings.utility_lambda_cost
 UTILITY_MU_LATENCY = settings.utility_mu_latency
 SEEDS = settings.seeds
+LLM_BASE_URL = settings.llm_base_url
+LLM_MODEL = settings.llm_model
+LLM_CONCURRENCY = settings.llm_concurrency
