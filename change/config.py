@@ -90,3 +90,4 @@ SEEDS = settings.seeds
 LLM_BASE_URL = settings.llm_base_url
 LLM_MODEL = settings.llm_model
 LLM_CONCURRENCY = settings.llm_concurrency
+LIVE = settings.live
