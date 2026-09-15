@@ -313,8 +313,17 @@ def _p_action_only(records: list[ExperienceRecord]) -> dict[str, dict[str, float
 
 class Snapshotter:
     """Consumes records one at a time, emits a BehavioralSnapshot every
-    `window` episodes or whenever memory_version has changed by 10+ since
-    the last snapshot, whichever comes first. Persists to `store`.
+    `window` episodes. Persists to `store`.
+
+    Owner-authorized revision (docs/checkpoints/phase-5.md "Revision"
+    section): dropped the memory_version-delta-10 trigger. It fired far
+    more often than every `window` episodes once a lesson extractor was
+    attached (memory grows ~1 lesson every 1-2 episodes under D2/D3),
+    producing noisy ~15-20-record windows that broke downstream tests (a
+    flat D1 run could spuriously cross ENVELOPE_VIOLATION_MAX by chance).
+    `change/loop.py`'s `GovernanceLoop` used to bypass this class entirely
+    for that reason and reimplement fixed-window snapshotting itself; now
+    that the class is window-only, it uses this class directly again.
     """
 
     def __init__(self, store: JsonlStore, window: int = WINDOW_EPISODES):
@@ -322,7 +331,6 @@ class Snapshotter:
         self.window = window
         self._buffer: list[ExperienceRecord] = []
         self._episode_ids_seen: set[str] = set()
-        self._last_memory_version = 0
         self._parent: BehavioralSnapshot | None = None
         self._parent_records: list[ExperienceRecord] = []
         self._snapshot_count = 0
@@ -331,11 +339,7 @@ class Snapshotter:
         self._buffer.append(record)
         self._episode_ids_seen.add(record.episode_id)
 
-        should_emit = (
-            len(self._episode_ids_seen) >= self.window
-            or (record.memory_version - self._last_memory_version) >= 10
-        )
-        if not should_emit:
+        if len(self._episode_ids_seen) < self.window:
             return None
 
         snapshot = build_snapshot(
@@ -350,7 +354,6 @@ class Snapshotter:
         self._parent = snapshot
         self._parent_records = list(self._buffer)
         self._snapshot_count += 1
-        self._last_memory_version = record.memory_version
         self._buffer = []
         self._episode_ids_seen = set()
         return snapshot

@@ -125,11 +125,15 @@ def test_d1_jsd_stays_below_alert_threshold_except_at_most_one():
 
 @pytest.mark.xfail(
     reason=(
-        "Same root cause as the phase-3 D2 xfails (sigmoid-clip ceiling bounds "
-        "achievable drift to ~0.08 over 500 episodes): across only 10 windows "
-        "of ~50 episodes, per-window violation-rate sampling noise dominates "
-        "the weak underlying trend, so monotonicity and last-snapshot "
-        "attribution are unreliable. See docs/checkpoints/phase-5.md."
+        "Population fix (docs/checkpoints/phase-3.md 'Revision') raised the "
+        "achievable ceiling a lot (windows now oscillate ~0.15-0.35, vs. "
+        "~0.05-0.21 before) but memory saturates within ~10-25 episodes "
+        "given the larger eligible-state fraction, not gradually across 500 "
+        "-- so by the first 50-episode window it's already near its noisy "
+        "plateau. 'First window vs last window' / monotonicity-across-"
+        "windows no longer has a gradual rise to detect. New finding, "
+        "reported back for a window-definition decision -- not a formula "
+        "or population issue. See docs/checkpoints/phase-5.md."
     ),
     strict=True,
 )
@@ -148,7 +152,10 @@ def test_d2_violation_rate_trends_up_and_last_snapshot_attributes_it():
     )
 
 
-def test_snapshotter_emits_on_window_and_on_memory_version_jump(tmp_path):
+def test_snapshotter_emits_every_window_episodes(tmp_path):
+    """Owner-authorized revision (docs/checkpoints/phase-5.md "Revision"
+    section): Snapshotter is window-count only now, no memory_version-jump
+    trigger."""
     store = JsonlStore(tmp_path / "run-1")
     snapshotter = Snapshotter(store, window=5)
 
@@ -162,10 +169,18 @@ def test_snapshotter_emits_on_window_and_on_memory_version_jump(tmp_path):
     assert emitted[-1] is not None
     assert emitted[-1].n_records == 5
 
+    # a large memory_version jump on the very next record must NOT trigger
+    # an early snapshot -- only the window count matters now.
     jump_record = make_record(100)
     jump_record.episode_id = "e-jump"
     jump_record.memory_version = 10
-    snapshot = snapshotter.consume(jump_record)
-    assert snapshot is not None
-    assert snapshot.n_records == 1
-    assert snapshot.parent_id == emitted[-1].snapshot_id
+    assert snapshotter.consume(jump_record) is None
+
+    for episode_idx in range(101, 105):
+        record = make_record(episode_idx)
+        record.episode_id = f"e{episode_idx}"
+        record.memory_version = 10
+        result = snapshotter.consume(record)
+    assert result is not None
+    assert result.n_records == 5
+    assert result.parent_id == emitted[-1].snapshot_id
