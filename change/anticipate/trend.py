@@ -18,12 +18,6 @@ def _logit(p: float) -> float:
     return math.log(p / (1 - p))
 
 
-def _softmax(logits: np.ndarray) -> np.ndarray:
-    shifted = logits - logits.max()
-    exp = np.exp(shifted)
-    return exp / exp.sum()
-
-
 @dataclass
 class _Cell:
     slope: float
@@ -56,6 +50,12 @@ class TrendModel:
     def __init__(self):
         self._cells: dict[tuple[str, str], _Cell] = {}
         self._states: list[str] = []
+        # Vectorized mirrors of _cells (state x action), built in fit(),
+        # used by _logits so predict/predict_sample don't pay per-scalar
+        # Python + numpy call overhead in the simulator's hot inner loop.
+        self._slopes: np.ndarray = np.zeros((0, len(ALL_ACTIONS)))
+        self._intercepts: np.ndarray = np.zeros((0, len(ALL_ACTIONS)))
+        self._residual_stds: np.ndarray = np.zeros((0, len(ALL_ACTIONS)))
 
     def fit(self, snapshots: list[BehavioralSnapshot]) -> TrendModel:
         if not snapshots:
@@ -99,28 +99,42 @@ class TrendModel:
                 self._cells[key] = _Cell(
                     slope=slope, intercept=intercept, residual_std=residual_std
                 )
+
+        k = len(self._states)
+        n_actions = len(ALL_ACTIONS)
+        self._slopes = np.zeros((k, n_actions))
+        self._intercepts = np.zeros((k, n_actions))
+        self._residual_stds = np.zeros((k, n_actions))
+        for si, state in enumerate(self._states):
+            for ai, action in enumerate(ALL_ACTIONS):
+                cell = self._cells[(state, action)]
+                self._slopes[si, ai] = cell.slope
+                self._intercepts[si, ai] = cell.intercept
+                self._residual_stds[si, ai] = cell.residual_std
         return self
 
-    def _logits(self, t: int, noise_rng: np.random.Generator | None) -> dict[str, np.ndarray]:
-        out: dict[str, np.ndarray] = {}
-        for state in self._states:
-            row = np.zeros(len(ALL_ACTIONS))
-            for i, action in enumerate(ALL_ACTIONS):
-                cell = self._cells[(state, action)]
-                logit_val = cell.intercept + cell.slope * t
-                if noise_rng is not None and cell.residual_std > 0:
-                    logit_val += noise_rng.normal(0.0, cell.residual_std)
-                row[i] = np.clip(logit_val, -TREND_LOGIT_CLIP, TREND_LOGIT_CLIP)
-            out[state] = row
-        return out
+    def _logits(self, t: int, noise_rng: np.random.Generator | None) -> np.ndarray:
+        """Vectorized (n_states, n_actions) logit matrix -- a single clip
+        call over the whole grid rather than one per (state, action)."""
+        logits = self._intercepts + self._slopes * t
+        if noise_rng is not None:
+            nonzero = self._residual_stds > 0
+            if nonzero.any():
+                logits = logits.copy()
+                logits[nonzero] += noise_rng.normal(0.0, self._residual_stds[nonzero])
+        return np.clip(logits, -TREND_LOGIT_CLIP, TREND_LOGIT_CLIP)
+
+    def _predict_from_logits(self, logits: np.ndarray) -> dict[str, dict[str, float]]:
+        shifted = logits - logits.max(axis=1, keepdims=True)
+        exp = np.exp(shifted)
+        probs = exp / exp.sum(axis=1, keepdims=True)
+        return {state: dict(zip(ALL_ACTIONS, probs[i])) for i, state in enumerate(self._states)}
 
     def predict(self, t: int) -> dict[str, dict[str, float]]:
-        logits = self._logits(t, noise_rng=None)
-        return {state: dict(zip(ALL_ACTIONS, _softmax(row))) for state, row in logits.items()}
+        return self._predict_from_logits(self._logits(t, noise_rng=None))
 
     def predict_sample(self, t: int, rng: np.random.Generator) -> dict[str, dict[str, float]]:
-        logits = self._logits(t, noise_rng=rng)
-        return {state: dict(zip(ALL_ACTIONS, _softmax(row))) for state, row in logits.items()}
+        return self._predict_from_logits(self._logits(t, noise_rng=rng))
 
 
 class LastValueModel:
