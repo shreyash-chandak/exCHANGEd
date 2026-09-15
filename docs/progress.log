@@ -1,0 +1,10 @@
+2026-09-14 adac896 phase 0 step 0.4 (smoke test) - no blockers
+2026-09-14 1d2eb24 phase 1 step 1.4 (tau2 offline import test) - no blockers; phase-1 STOP reached at 6e52639, three data-contract mismatches found (see docs/checkpoints/phase-1.md), blocks phase 4
+2026-09-14 45ba0e1 phase 2 step 2.3 (jsonl store) - no blockers
+2026-09-14 6fcb584 phase 3 step 3.3 (mock agent) - no blockers yet; D2/D3 drift-magnitude issue found later in 3.7 (bdf7cfb), see docs/checkpoints/phase-3.md
+2026-09-14 627e0a3 phase 3 checkpoint - blocked on owner: D2/D3 mock drift thresholds (docs/checkpoints/phase-3.md); phases 5-6 unblocked, proceeding
+2026-09-14 e59c167 phase 6 step 6.1 (T1 trend model) - no blockers
+2026-09-14 4bcb92a phase 6 step 6.6 (run_anticipate script) - no blockers; phase-6 checkpoint next
+2026-09-15 b7f7c96 phase 7 step 7.3 (negotiate boundary controller) - no blockers
+2026-09-15 02f41f1 phase 7 step 7.5 fix (loop sim_trajectories/sim_horizon overrides) - no blockers; perf fix to TrendModel followed (1345d31)
+2026-09-15 07dd4ce phase 7 checkpoint + status update - phase-7-done tagged; STOP reached (live tau2 D2 sanity gate is owner's call); phase 8 unblocked, proceeding
