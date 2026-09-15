@@ -1,8 +1,11 @@
 # CHANGE PoC — status
 
-Last updated: 2026-09-15 (session 1, Claude Sonnet 5). **PoC complete per the guide's
+Last updated: 2026-09-15 (session 2, Claude Sonnet 5). **PoC complete per the guide's
 own definition of done** (guide section 4), modulo the items in "What's not done"
-below — all of which are the owner's call, not further coding work.
+below — all of which are the owner's call, not further coding work. This session
+implemented the owner's answers to the open questions from session 1 (Q3, Q5 and
+its three sub-decisions, Q6, Q7) and found/fixed three real bugs those answers
+exposed along the way.
 
 ## What this is
 
@@ -14,129 +17,144 @@ repo, since `context/` already held the planning docs. Branch `shreyash` (not me
 
 ## Where things stand
 
-**Phases 0, 1, 2, 3, 5, 6, 7, 8 done and tagged.** Phase 4 (tau2 adapter) was not
-started — blocked on owner decisions, see below; `docs/checkpoints/phase-4.md`
-documents why. Phase 9 (Harmonize, optional) was not started per the guide's own
-"only start if the owner says so."
+**Phases 0, 1, 2, 3, 5, 6, 7, 8 done and tagged.** Phase 4 (tau2 adapter) still not
+started — still blocked on owner decisions (one of four questions from phase 1 is now
+answered, see below); `docs/checkpoints/phase-4.md` documents why. Phase 9 (Harmonize,
+optional) not started per the guide's own "only start if the owner says so."
 
-`make test` (`uv run pytest -q -m "not live"`) is green: 1420 passed, 3 xfailed.
-`tests/test_loop.py` (~75s, run separately) adds 1 more passed, 1 more xfailed.
+`make test` (`uv run pytest -q -m "not live"`) is green: **1421 passed, 4 xfailed**
+(all tests now run in one `pytest` invocation, including `test_loop.py` — no longer
+needs a separate run; full suite takes ~30s).
 
-- **Phase 0** (bootstrap): repo layout, `uv` + Python 3.12 pinned, Makefile, ruff, smoke test.
-- **Phase 1** (tau2 discovery, STOP): `vendor/tau2-bench` submodule pinned to `v1.0.1`.
-  **Found three real mismatches** between the guide's data contracts and tau2 retail's
-  actual tools/data (no refund_full/refund_partial tools, no order dates anywhere so
-  `within_policy_window` can't be computed as specified, no user-stance signal in
-  retail tasks). `docs/checkpoints/phase-1.md`. **Blocks phase 4.**
-- **Phase 2** (data contracts + store): `change/contracts.py`, `change/config.py`,
-  `change/store.py`. Fully tested, schemas exported to `schemas/`.
-- **Phase 3** (mock environment): `envs/mock/{mock_env,mock_agent}.py`,
-  `change/memory.py`, `change/generate.py` (MockLessonExtractor), `scripts/run_episodes.py`.
-  **Found two structural issues** in the guide's own mock-env drift design (D2's
-  generosity mechanism has a hard mathematical ceiling ~8.5 points short of the
-  required +10 point threshold; D3's policy-update test is unreliable). Both proven
-  with real measurements. `docs/checkpoints/phase-3.md` has 5 concrete fix options.
-  Two assertions `xfail(strict)`.
-- **Phase 5** (Contextualize): `change/contextualize.py`. Fixed a genuine contradiction
-  in the guide's own mock policy spec (bullets 3 vs 4 of guide 3.2). One D2 assertion
-  `xfail` (same root cause as phase 3). `docs/checkpoints/phase-5.md`.
-- **Phase 6** (Anticipate): `change/anticipate/{trend,simulator,envelope,counterfactual}.py`,
-  `scripts/run_anticipate.py`. All tests pass. `docs/checkpoints/phase-6.md`.
-- **Phase 7** (Generate/Sandbox/Negotiate/Evolve/loop): full `CandidateGenerator`,
-  `Sandbox`, `Negotiate` (boundary controller + oracle, with real boundary-expansion
-  behavior visible in the smoke test), `Evolve` (apply/canary/rollback/distill),
-  `GovernanceLoop` for A0-FULL, `scripts/run_loop.py`. `test_loop.py` confirms FULL has
-  strictly lower cumulative violations than A0 on matched settings/seed. Found and fixed
-  a real perf bug in `TrendModel` (~2x speedup). One deterministic seed-0 statistical
-  near-miss `xfail`. `docs/checkpoints/phase-7.md`. **STOP reached** (live tau2 D2
-  sanity gate is owner's call, and blocked on phase-1 questions anyway).
-- **Phase 8** (experiment grid + metrics, PoC-complete milestone): `change/metrics.py`
-  (all guide 8.1 metrics), `change/experiment.py` + `scripts/run_grid.py` (resumable
-  grid runner), `scripts/make_figures.py` (3 figures + summary table). Full 9-cell
-  smoke test grid completed (`runs/grid-mock-smoke/summary.csv`, 9 rows) — **but see
-  the important caveat in `docs/checkpoints/phase-8.md`**: this session's machine hit
-  real system-wide memory pressure mid-grid (unrelated to the code — confirmed via
-  `Get-CimInstance`, no Python process was even in the top memory consumers), which
-  killed the run three times. The resumable design handled it correctly in practice
-  (not just in the pytest test), but the two `FULL` cells that needed re-running ended
-  up using reduced simulation settings to fit available memory while `A0`/`A2`
-  completed at full scale — so the smoke test's own table (`FULL|d2`: 78 violations
-  vs `A0|d2`: 63) is **not** a fair comparison and looks like it contradicts the
-  governance benefit. It doesn't: `test_loop.py`'s properly matched-settings
-  comparison (phase 7) is the validated claim (FULL < A0), not this table.
+- **Phases 0–2**: unchanged from session 1 — see prior status or `docs/checkpoints/phase-{0,1,2}.md`.
+- **Phase 3** (mock environment): population revised this session (see below). `docs/checkpoints/phase-3.md`.
+- **Phase 5** (Contextualize): `Snapshotter` simplified this session (see below). `docs/checkpoints/phase-5.md`.
+- **Phase 6** (Anticipate): envelope baseline revised this session (see below). `docs/checkpoints/phase-6.md`.
+- **Phase 7** (Generate/Sandbox/Negotiate/Evolve/loop): two real bugs found and fixed
+  this session, one genuine finding documented. `docs/checkpoints/phase-7.md`.
+- **Phase 8** (experiment grid + metrics): grid re-run this session at a uniform,
+  publication-scale simulation setting. `docs/checkpoints/phase-8.md`.
+
+## This session's work (owner answered Q3/Q5/Q6/Q7 from the consolidated list; implemented exactly as specified)
+
+1. **D2/D3 mock population fix** (Q5 main, exact spec given): reweighted `_TASK_TYPES`
+   to `{return:.30, exchange:.30, cancel:.15, modify:.15, lookup:.10}`, dropped
+   `_WITHIN_WINDOW_PROB` to `.55`, switched D3 to `satisfaction` feedback gated on
+   episode count (not turn count). Eligible-state fraction rose from 0.14 to 0.27 as
+   calculated. **New finding**: the fix raised the achievable ceiling well past the
+   guide's threshold, but also made the drift saturate within ~10-25 episodes instead
+   of ramping across 500 — so the D2/D3 "first-vs-last-window" magnitude tests remain
+   `xfail`, now for this new, correctly-diagnosed reason (not the old ceiling issue).
+   Reported back; window redefinition is a modeling decision, not made unilaterally.
+   `docs/checkpoints/phase-3.md`.
+2. **Snapshotter simplified** to window-count-only (Q5 downstream #1): the
+   memory-version-delta-10 trigger is gone; `change/loop.py` uses `Snapshotter`
+   directly again instead of its old bypass. `docs/checkpoints/phase-5.md`.
+3. **A0 threshold test loosened** (Q5 downstream #2): tolerates at most 1 spurious
+   trigger per 20 cycles instead of demanding exactly 0 — a property of A0's
+   deliberately un-debounced blunt check, not a bug. Now genuinely passes (`xfail`
+   removed). `docs/checkpoints/phase-7.md`.
+4. **Envelope baseline fixed to a 3-window mean** (Q5 downstream #3): fixed at the
+   run's first 3 windows, not just the first window's noisy values.
+   `docs/checkpoints/phase-6.md`.
+5. **Two real bugs found while investigating why FULL started losing to A0** after
+   the population fix (found by measuring, not assuming — `docs/checkpoints/phase-7.md`):
+   - `TaskSplit`'s plain shuffle under-sampled a 40-task canary/sandbox pool, biasing
+     its composition against `train`'s under the new, more sensitive population — fixed
+     by stratifying on `(task_type, within_policy_window)`.
+   - That stratification fix then left `train`/`canary`/`sandbox` as contiguous
+     per-stratum blocks instead of interleaved (found via a byte-identical-behavior
+     anomaly in the Q7 grid re-run) — fixed with a final shuffle per list.
+   - `_seeded_rng` used Python's per-process-randomized `hash()`, silently breaking
+     reproducibility of the loop's decision layer across runs of the same seed — fixed
+     with `zlib.crc32`.
+6. **Remaining FULL-vs-A0 gap under D2/D3 is a genuine, documented finding, not a bug**:
+   `Evolve`'s canary gate — verified against a small (~40-task) held-out sample —
+   rejects nearly every corrective candidate under the now-correctly-strong drift, on
+   either `ENVELOPE_VIOLATION_MAX` or `ENVELOPE_SUCCESS_DROP_MAX` depending on the
+   specific noisy canary draw, so `agent_version` rarely advances. A0's blunt,
+   unverified gate has no such check and wins on raw violation count while offering no
+   rollback guarantee. `test_loop.py`'s test for this is `xfail(strict)` with the full
+   root cause in its reason. Owner-authorized as a documented finding.
+7. **Q3 (tau2 registry) decision recorded**: register `LessonAgent` into
+   `tau2.registry.registry` at import time, no vendor edits — not yet actionable,
+   phase 4 still blocked on the other three phase-1 questions. `docs/checkpoints/phase-4.md`.
+8. **Q7 grid re-run**: all 9 original smoke cells plus seed 1 (18 cells), one uniform
+   `SIM_TRAJECTORIES=SIM_HORIZON=2000` setting (the guide's own default — this
+   machine held it fine this time), sequential cell-at-a-time as before.
+   `change/experiment.py` now records the effective `sim_trajectories`/`sim_horizon`
+   per cell as `summary.csv` columns, confirmed uniform across all 18 rows. The
+   corrected table (after the interleaving-bug fix) shows FULL with *more* cumulative
+   violations than A0 under D2/D3, consistently across both seeds — this is the real,
+   reproducible consequence of finding 6 above, not a settings artifact.
+   `docs/checkpoints/phase-8.md`.
+
+All of the above implemented from the owner's own specific technical instructions
+(exact reweighted population values, exact D3 mechanism swap, exact test tolerances,
+exact baseline-window count, exact grid scale) — nothing here was a unilateral design
+choice except the two follow-on bug fixes (TaskSplit interleaving, `_seeded_rng`),
+which were genuine bugs with no guide-protected constant involved.
 
 ## What's not done (owner decisions, not further coding work)
 
-1. **Phase 4 (tau2 adapter) was never started** — needs the phase-1 questions
-   answered first (see below), plus a budget/model choice, plus `CHANGE_LIVE=1` +
-   explicit approval before any real LLM call per guide section 0.2.
-2. **Not merged to `main`** — everything is on branch `shreyash`. Guide section 4's
-   "definition of done" says "green on `main`"; merging is the owner's call.
-3. **Phase 9 (Harmonize, two real agents) not started** — explicitly optional,
-   guide says "only start if the owner says so."
-4. **The smoke-test grid's own table has a settings mismatch** (see above) — not a
-   code defect, just means `docs/checkpoints/phase-8.md`'s table shouldn't be quoted
-   as the FULL-vs-A0 evidence; `test_loop.py` is. Could be re-run cleanly (matched
-   settings across all 9 cells, ideally on a machine with more free memory) if a
-   clean smoke-test table is wanted for the paper.
+1. **Phase 4 (tau2 adapter) still not started** — Q3 (tau2 registry) is answered, but
+   three of the four phase-1 questions remain open (action/state taxonomy for real
+   retail tools, D3 retargeting for a status-gate policy, LLM budget/model choice).
+2. **Not merged to `main`** — everything is on branch `shreyash`.
+3. **Phase 9 (Harmonize) not started** — explicitly optional, owner-gated.
+4. **D2/D3/Contextualize-D2 magnitude tests remain `xfail`** — not because the
+   population fix failed (it worked, past the guide's own threshold), but because the
+   fix's stronger drift saturates faster than a "first-window-vs-last-window"
+   comparison can measure. A window-definition decision is needed if a clean pass is
+   wanted here; the mock env's job (letting phases 5-8 be built and tested at zero
+   cost) is otherwise unaffected.
+5. **The FULL-vs-A0 comparison under D2/D3 (`test_loop.py`, phase-8 grid table) now
+   shows FULL losing on raw cumulative violations**, for a well-understood, genuine
+   reason (`Evolve`'s canary gate can't confirm recovery against a small sample fast
+   enough under this drift severity), not a bug or settings artifact. Whether this is
+   an acceptable PoC-level finding or warrants an Evolve/canary design change (larger
+   canary sample, multi-cycle credit, different rollback policy) is the owner's call.
 
 ## Consolidated open questions for the owner
 
-**From phase 1 (blocks phase 4):**
-1. How to adjust `CanonicalAction`/`CanonicalState` for retail's real tools — collapse
-   the refund actions to match retail's actual write tools, rename
-   `within_policy_window` to a status-gate concept (no dates exist in retail data at
-   all), keep `user_stance` as a constant `"neutral"` — or pick a different tau2
-   domain (airline/telecom, not investigated) instead? (`docs/checkpoints/phase-1.md`,
-   `docs/tau2_interfaces.md`)
-2. If retargeting D3 to a status-gating policy change (since retail has no date
-   window): what should the specific policy edit be?
-3. OK to register a custom `LessonAgent` factory into `tau2.registry.registry` at
-   import time (no vendor file edits) for phase 4?
-4. Budget and model choice for the agent/user-simulator LLMs (plan section 7.4/11) —
-   needed before any `CHANGE_LIVE=1` script can run at all.
+**From phase 1 (blocks phase 4) — Q3 now answered, three remain:**
+1. How to adjust `CanonicalAction`/`CanonicalState` for retail's real tools?
+2. If retargeting D3 to a status-gating policy change: what should the specific policy
+   edit be?
+3. ~~OK to register a custom `LessonAgent` factory into `tau2.registry.registry`?~~
+   **Answered**: yes, at import time, no vendor edits.
+4. Budget and model choice for the agent/user-simulator LLMs?
 
-**From phase 3 (affects phases 3/5/6/7's drift-magnitude findings, not a hard blocker):**
-5. Which fix for the D2/D3 mock drift thresholds — loosen thresholds, change the
-   sigmoid formula/clip bound, raise the eligible-state fraction, switch D3 to
-   `satisfaction` feedback, or accept as documented limitations of the mock (the real
-   tau2 D2 gate in phase 4 would be the actual empirical validation)?
-   (`docs/checkpoints/phase-3.md` has 5 concrete options with the math worked out.)
+**From this session's new findings:**
+5. Which window definition for the D2/D3/Contextualize-D2 magnitude tests, now that
+   the drift saturates within ~10-25 episodes rather than ramping across 500?
+   (`docs/checkpoints/phase-3.md`, `phase-5.md`.)
+6. Is FULL losing to A0 on raw cumulative violations under D2/D3 (well-diagnosed:
+   `Evolve`'s canary gate can't confirm recovery fast enough against a small sample)
+   an acceptable PoC-level finding, or does it warrant a design change to Evolve's
+   canary policy? (`docs/checkpoints/phase-7.md`, `phase-8.md`.)
 
-**New, process-level:**
-6. Merge `shreyash` to `main`? Guide's literal DoD wants tests green "on main."
-7. Once phase-1/4 memory frees up (or on a less loaded machine): worth re-running
-   `scripts/run_grid.py` with matched settings across all 9 cells for a clean
-   phase-8 table, or is `test_loop.py`'s validated claim sufficient for now?
-8. Start phase 9 (Harmonize, Bob + two-agent coordination)? Explicitly optional and
-   owner-gated per the guide.
+**Still open, process-level:**
+7. Merge `shreyash` to `main`?
+8. Start phase 9 (Harmonize)?
 
 ## Environment notes for next session
 
-- Native Windows toolchain (Git Bash + `uv`) used throughout, not WSL — worked fine
-  including the tau2-bench editable install. WSL (Ubuntu-26.04) available as fallback.
-- System Python is 3.14 (too new for `>=3.12,<3.14`); `.python-version` pins 3.12.10,
-  already resolved, no action needed.
-- `make` is not installed in this shell; use the underlying `uv run ...` commands
-  (see `Makefile`).
-- `pytest` is scoped to `testpaths = ["tests"]` — don't remove, else it collects
-  `vendor/tau2-bench`'s own test suite and errors on missing extras.
-- Zero LLM spend this entire session — everything runs offline against the mock env.
-- Performance: `TrendModel` is vectorized (phase 7). `GovernanceLoop`/`run_cell`/
-  `run_grid` take explicit `sim_trajectories`/`sim_horizon` overrides for fast runs —
-  setting `CHANGE_SIM_TRAJECTORIES` via env var at test/run time does **not**
-  reliably work (constants are bound at first import, typically during pytest
-  collection or module import, before a caller can set the env var).
-- `change/loop.py` deliberately bypasses `Snapshotter` for its own cycle boundary
-  (fixed 50-episode windows via `build_snapshot` directly) — `docs/checkpoints/phase-7.md`.
-- If a long grid run gets killed for memory again: it's resumable by construction,
-  just re-run the same `run_grid.py` command (or call `change.experiment.run_cell`
-  directly for one cell at a time with smaller `sim_trajectories`/`sim_horizon` if
-  memory is tight) — verified working under real interruption, not just in tests.
+- Native Windows toolchain (Git Bash + `uv`), not WSL.
+- `pytest` runs the full suite (including `test_loop.py`) in one invocation now,
+  ~30s — no longer needs to be run separately for timing reasons.
+- `runs/` is gitignored; grid re-runs should use a fresh/cleared output directory
+  (`rm -rf runs/<name>` first) to avoid the resumable `DONE`-marker mechanism silently
+  reusing stale pre-fix data.
+- If re-running the grid at 2000x2000: budget ~85s/cell for A0/A2, ~105s/cell for
+  FULL (measured this session) — an 18-cell grid takes ~30 minutes.
+- `TaskSplit` (`change/sandbox.py`) now stratifies by `env.stratify_key(task_id)` when
+  the env provides one, then shuffles each resulting list — both the stratification
+  *and* the final shuffle matter; removing either reintroduces a bug (composition bias
+  or blocky ordering respectively) documented in `docs/checkpoints/phase-7.md`.
 
 ## Next step
 
-Nothing is technically blocking further *mock-env* work, but there isn't much
-mock-env work left per the guide (phase 8 was the last mandatory phase). The
-meaningful next steps all need the owner's input — see "Consolidated open questions"
-above.
+Nothing is technically blocking further *mock-env* work. The meaningful next steps all
+need the owner's input — see "Consolidated open questions" above, especially #5 and #6
+which are new this session.
