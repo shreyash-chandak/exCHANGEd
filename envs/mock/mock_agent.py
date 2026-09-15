@@ -30,12 +30,14 @@ class MockAgent:
         rng: random.Random,
         base_generosity: float = 0.0,
         agent_id: str = "alice",
+        gates: dict | None = None,
     ):
         self.memory = memory
         self.rng = rng
         self.base_generosity = base_generosity
         self.agent_id = agent_id
         self.agent_version = 1
+        self.gates = gates if gates is not None else {}
 
     @property
     def memory_version(self) -> int:
@@ -51,6 +53,19 @@ class MockAgent:
     def act(self, obs: dict) -> ActionChoice:
         state: CanonicalState = obs["state"]
         rng: random.Random = obs.get("rng", self.rng)
+
+        gate = self.gates.get("approval_gate")
+        if (
+            gate
+            and state.value_bucket == gate.get("value_bucket")
+            and not state.within_policy_window
+        ):
+            return ActionChoice(
+                action=CanonicalAction.ESCALATE,
+                tools_used=[CanonicalAction.ESCALATE.value],
+                lessons_in_context=[],
+            )
+
         lessons = self.memory.retrieve(state, MEMORY_TOP_K)
         lesson_ids = [lesson.lesson_id for lesson in lessons]
 

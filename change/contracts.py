@@ -47,6 +47,20 @@ class CanonicalState:
             f"{int(self.within_policy_window)}|{self.user_stance}|{self.prior_turns_bucket}"
         )
 
+    @classmethod
+    def from_state_key(cls, key: str) -> CanonicalState:
+        task_type, order_status, value_bucket, window, user_stance, prior_turns_bucket = key.split(
+            "|"
+        )
+        return cls(
+            task_type=task_type,
+            order_status=order_status,
+            value_bucket=value_bucket,
+            within_policy_window=bool(int(window)),
+            user_stance=user_stance,
+            prior_turns_bucket=prior_turns_bucket,
+        )
+
 
 class CanonicalAction(str, Enum):
     """Canonical retail action (guide section 2.2)."""
