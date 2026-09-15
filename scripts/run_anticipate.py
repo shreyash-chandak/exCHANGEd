@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import typer
 
-from change.anticipate.envelope import Envelope, make_prediction
+from change.anticipate.envelope import Envelope, baseline_from_first_windows, make_prediction
 from change.anticipate.simulator import simulate
 from change.anticipate.trend import LastValueModel, TrendModel
 from change.config import ENVELOPE_VIOLATION_MAX, SIM_HORIZON, SIM_ROLLING_WINDOW, SIM_TRAJECTORIES
@@ -77,7 +77,11 @@ def main(
         raise typer.Exit(1)
     cutoff = fit_snapshots[-1]
 
-    envelope = Envelope(baseline_success=cutoff.success_rate, baseline_cost=cutoff.mean_cost)
+    # Session-2 guide 4.0.6: baseline is the mean over the run's first 3
+    # windows (not just the cutoff window's own noisy values), same
+    # implementation change/loop.py uses.
+    baseline_success, baseline_cost, _baseline_latency = baseline_from_first_windows(snapshots)
+    envelope = Envelope(baseline_success=baseline_success, baseline_cost=baseline_cost)
     realized_exit_t = _realized_exit_t(records, after_t=cutoff.window_end_t)
 
     typer.echo(f"cutoff snapshot: {cutoff.snapshot_id} (window_end_t={cutoff.window_end_t})")

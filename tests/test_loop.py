@@ -106,7 +106,7 @@ def test_full_reduces_cumulative_violations_vs_a0_on_d2(tmp_path):
     assert any(r["candidate_kind"] != "do_nothing" for r in results_full)
 
 
-def test_a0_on_d1_produces_at_most_one_spurious_adaptation(tmp_path):
+def test_a0_on_d1_produces_at_most_one_adaptation(tmp_path):
     env = MockRetailEnv(n_tasks=400, seed=0, run_id="loop-a0-d1")
     loop = GovernanceLoop(
         env,

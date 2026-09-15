@@ -32,6 +32,22 @@ def _rolling_mean(arr: np.ndarray, window: int) -> np.ndarray:
     return out
 
 
+def baseline_from_first_windows(
+    snapshots: list[BehavioralSnapshot], n: int = 3
+) -> tuple[float, float, float]:
+    """Session-2 guide 4.0.6: baseline_success/baseline_cost (and
+    baseline_latency, tracked alongside Envelope by callers) are the mean
+    over the first `n` windows of a run, then frozen -- not just the first
+    window's own noisy values. Single implementation, reused by
+    `change/loop.py` and `scripts/run_anticipate.py` rather than duplicated.
+    Uses whatever is available if the run has fewer than `n` windows."""
+    windows = snapshots[:n]
+    baseline_success = sum(s.success_rate for s in windows) / len(windows)
+    baseline_cost = sum(s.mean_cost for s in windows) / len(windows)
+    baseline_latency = sum(s.mean_latency_ms for s in windows) / len(windows)
+    return baseline_success, baseline_cost, baseline_latency
+
+
 class Envelope:
     def __init__(self, baseline_success: float, baseline_cost: float):
         self.baseline_success = baseline_success

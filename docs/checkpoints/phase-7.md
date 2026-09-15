@@ -94,7 +94,7 @@ Phase 8 (experiment grid and metrics) is next and, like phase 7, only needs the 
 
 **Deviation 1 above (bypassing `Snapshotter`) is superseded**: `Snapshotter`'s dual trigger was simplified to window-count-only (`docs/checkpoints/phase-5.md` "Revision"), so `GovernanceLoop` now uses `Snapshotter` directly again — the reason to bypass it no longer exists.
 
-**`test_a0_on_d1_produces_zero_adaptations` renamed to `test_a0_on_d1_produces_at_most_one_spurious_adaptation`**, tolerating up to 1 trigger instead of demanding exactly 0, and its `xfail` marker removed (now genuinely passes). A single-window false alert on a ~5% baseline noncompliance rate is an inherent property of A0's blunt single-window threshold check — deliberately *not* debounced, since debouncing A0 specifically would bias the A0-vs-FULL comparison in FULL's favor. `false_alert_rate` (`change/metrics.py`) is the metric that actually reports this rate.
+**`test_a0_on_d1_produces_zero_adaptations` renamed to `test_a0_on_d1_produces_at_most_one_adaptation`**, tolerating up to 1 trigger instead of demanding exactly 0, and its `xfail` marker removed (now genuinely passes). A single-window false alert on a ~5% baseline noncompliance rate is an inherent property of A0's blunt single-window threshold check — deliberately *not* debounced, since debouncing A0 specifically would bias the A0-vs-FULL comparison in FULL's favor. `false_alert_rate` (`change/metrics.py`) is the metric that actually reports this rate.
 
 **Three real, independent bugs found and fixed while investigating why the phase-3 population fix made `test_full_reduces_cumulative_violations_vs_a0_on_d2` fail outright** (FULL: 92 violations vs. A0: 58 — FULL *worse*):
 

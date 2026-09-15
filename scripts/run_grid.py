@@ -25,9 +25,22 @@ def main(
     sim_horizon: int = typer.Option(
         None, "--sim-horizon", help="overrides SIM_HORIZON uniformly for every cell"
     ),
+    serial: bool = typer.Option(
+        True,
+        "--serial/--no-serial",
+        help=(
+            "run cells one at a time. change.experiment.run_grid is a plain "
+            "sequential loop (no concurrent runner exists yet -- that's "
+            "session-2 guide 4.1.6, for LIVE domains), so this is the only "
+            "mode currently; --no-serial is rejected rather than silently "
+            "ignored."
+        ),
+    ),
 ) -> None:
     if env != "mock":
         raise typer.BadParameter("only --env mock is implemented")
+    if not serial:
+        raise typer.BadParameter("only --serial is implemented (no concurrent runner exists yet)")
 
     system_list = systems.split(",")
     condition_list = conditions.split(",")

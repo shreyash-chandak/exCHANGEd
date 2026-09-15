@@ -1,9 +1,10 @@
 """Guide 6.5's D2 forecast comparison. Per the guide: if T1 does not beat
-LastValue, report both errors rather than tuning. At seed 0, T1 does beat
-LastValue, but only marginally (~0.0004) -- both forecasts are close to
-each other and far from the realized rate, consistent with the weak D2
-signal already documented in docs/checkpoints/phase-3.md (see
-docs/checkpoints/phase-6.md for the full numbers)."""
+LastValue, report both errors rather than tuning. At seed 0, post the
+session-2 population revision (docs/checkpoints/phase-3.md "Revision"),
+T1 beats LastValue by 0.0151 absolute error (t1_error=0.2082,
+lv_error=0.2233, target=0.2778) -- clear of session-2 guide 4.0's 0.005
+STOP threshold, up from the pre-revision margin of ~0.0004. See
+docs/checkpoints/phase-6.md for the full numbers."""
 
 import random
 

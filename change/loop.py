@@ -12,7 +12,7 @@ from uuid import uuid4
 import numpy as np
 
 from change.anticipate.counterfactual import patch_from_sandbox, rank
-from change.anticipate.envelope import Envelope, make_prediction
+from change.anticipate.envelope import Envelope, baseline_from_first_windows, make_prediction
 from change.anticipate.simulator import simulate
 from change.anticipate.trend import LastValueModel, TrendModel
 from change.config import (
@@ -209,18 +209,13 @@ class GovernanceLoop:
 
     def _update_envelope(self, snapshot: BehavioralSnapshot) -> None:
         """Owner-authorized revision (docs/checkpoints/phase-6.md "Revision"
-        section): baseline_success/baseline_cost/baseline_latency are the
-        mean over the first 3 windows of the run, then fixed -- not just the
-        first window's own (noisy) values."""
+        section, session-2 guide 4.0.6): baseline_success/baseline_cost/
+        baseline_latency are the mean over the first 3 windows of the run,
+        then fixed -- not just the first window's own (noisy) values. Shared
+        with scripts/run_anticipate.py via baseline_from_first_windows."""
         if len(self._baseline_snapshots) < 3:
             self._baseline_snapshots.append(snapshot)
-        baseline_success = sum(s.success_rate for s in self._baseline_snapshots) / len(
-            self._baseline_snapshots
-        )
-        baseline_cost = sum(s.mean_cost for s in self._baseline_snapshots) / len(
-            self._baseline_snapshots
-        )
-        self.baseline_latency = sum(s.mean_latency_ms for s in self._baseline_snapshots) / len(
+        baseline_success, baseline_cost, self.baseline_latency = baseline_from_first_windows(
             self._baseline_snapshots
         )
         self.envelope = Envelope(baseline_success=baseline_success, baseline_cost=baseline_cost)
