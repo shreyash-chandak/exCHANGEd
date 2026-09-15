@@ -9,24 +9,32 @@ since that would bias the A0-vs-FULL comparison in FULL's favor.
 this rate; this test just bounds it loosely as a sanity check.
 
 `test_full_reduces_cumulative_violations_vs_a0_on_d2` is xfail: after fixing
-two real bugs the population revision exposed (TaskSplit's plain shuffle
-under-sampling 40/40 canary/sandbox tasks biased composition vs. the 320-task
-train split -- fixed by stratifying on (task_type, within_policy_window); and
-`_seeded_rng`'s use of Python's per-process-randomized `hash()` on candidate
-ids -- fixed with zlib.crc32), cumulative violations tie (31 vs 31) rather
-than FULL beating A0. The remaining gap is a genuine dynamic, not a bug:
-Evolve's canary gate (ENVELOPE_SUCCESS_DROP_MAX=0.05) compares canary
-task_success against baseline_success frozen at the run's first 3 windows
-(pre-drift). Under the corrected, much stronger D2 drift, achievable success
-on the canary split falls below that pre-drift baseline by more than 0.05
-almost immediately, so every corrective candidate FULL proposes gets rolled
-back -- even ones whose canary violation_rate is comfortably inside
-ENVELOPE_VIOLATION_MAX -- and memory never compounds a fix. A0 has no such
-check (`_run_simple_system` applies unconditionally), so this is not an
-apples-to-apples candidate-quality comparison: FULL is held to a stricter,
-safety-verified recovery bar that this drift severity makes unreachable in
-one cycle. Owner-authorized as a documented finding rather than a further
-code change. See docs/checkpoints/phase-7.md.
+three real bugs the population revision exposed --
+1) TaskSplit's plain shuffle under-sampling 40/40 canary/sandbox tasks
+   biased composition vs. the 320-task train split -- fixed by stratifying
+   on (task_type, within_policy_window);
+2) that stratification fix itself then left train/canary/sandbox as
+   contiguous per-stratum blocks (e.g. ~50 straight same-task_type episodes)
+   instead of interleaved, since GovernanceLoop/Sandbox.run both cycle
+   through these lists by index -- fixed with a final shuffle per list after
+   stratified sampling;
+3) `_seeded_rng`'s use of Python's per-process-randomized `hash()` on
+   candidate ids -- fixed with zlib.crc32
+-- cumulative violations land close (44 vs 66 at the settings below, seed 0)
+rather than FULL beating A0. The remaining gap is a genuine dynamic, not a
+bug: Evolve's canary gate (`change/evolve.py::check_and_rollback`) rejects
+essentially every FULL candidate under the corrected, much stronger D2
+drift -- sometimes on ENVELOPE_VIOLATION_MAX (a single noisy ~40-task canary
+pass exceeds it even when the live window doesn't), sometimes on
+ENVELOPE_SUCCESS_DROP_MAX (post-drift achievable success falls short of the
+baseline frozen at the run's first 3 pre-drift windows) -- so every
+corrective candidate gets rolled back and memory never compounds a fix. A0
+has no such check (`_run_simple_system` applies unconditionally), so this is
+not an apples-to-apples candidate-quality comparison: FULL is held to a
+stricter, safety-verified recovery bar that this drift severity makes
+unreachable in one cycle, and a single small canary sample can't reliably
+confirm either criterion. Owner-authorized as a documented finding rather
+than a further code change. See docs/checkpoints/phase-7.md.
 """
 
 import pytest

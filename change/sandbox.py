@@ -58,6 +58,22 @@ class TaskSplit:
             self.canary.extend(heldout[:n_canary])
             self.sandbox.extend(heldout[n_canary:])
 
+        # Bug fix: extending per-stratum in a fixed (sorted-key) order left
+        # each list as contiguous blocks by stratum (e.g. every "cancel"
+        # task, then every "exchange" task, ...) instead of interleaved.
+        # GovernanceLoop cycles through `train` by index
+        # (`split.train[episode_counter % len(split.train)]`) and Sandbox.run
+        # /canary do the same for `sandbox`/`canary` -- both implicitly rely
+        # on a well-mixed order, not just correct proportions. Blocky order
+        # meant, e.g., ~50 straight episodes of one task_type before any
+        # eligible (return/exchange, out-of-window) task appeared at all,
+        # breaking the drift mechanism's intended episode-by-episode mixing.
+        # A final shuffle restores interleaving while keeping the
+        # stratified, proportionally-representative composition.
+        rng.shuffle(self.train)
+        rng.shuffle(self.canary)
+        rng.shuffle(self.sandbox)
+
     def save(self, run_dir: Path) -> None:
         run_dir.mkdir(parents=True, exist_ok=True)
         path = run_dir / "task_split.json"
