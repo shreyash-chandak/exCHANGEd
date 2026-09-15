@@ -103,16 +103,172 @@ def _status_for_age(rng: random.Random, days_old: int) -> str:
     """Status consistent with age: very recent orders haven't shipped yet,
     older orders are almost always delivered (needed for return/exchange
     window coverage across 0-30/31-60/60+ days), a few end up in a
-    terminal refunded/cancelled/exchanged state."""
-    if days_old < 2:
-        return rng.choices(["pending", "processed"], weights=[0.6, 0.4])[0]
-    if days_old < 5:
+    terminal refunded/cancelled/exchanged state.
+
+    Widened from a <2-day to a <7-day "recent" bucket: at <2 days, only
+    ~4 of 300 orders landed as pending (measured), nowhere near enough
+    for scripts/gen_refunds_tasks.py's cancel-request grid (3 value x 3
+    stance cells, each needing its own pending order) to find a match --
+    23 of 81 grid cells came back empty. ~7 days gives enough pending
+    volume across all three value tertiles without changing the
+    delivered-order population the return/exchange window grid relies on
+    (delivered orders still dominate from day 5 onward, unchanged)."""
+    if days_old < 7:
+        return rng.choices(["pending", "processed"], weights=[0.55, 0.45])[0]
+    if days_old < 10:
         return rng.choices(["processed", "shipped", "delivered"], weights=[0.3, 0.4, 0.3])[0]
     # Older orders: mostly delivered, a handful terminal for realism/coverage.
     return rng.choices(
         ["delivered", "cancelled", "refunded", "exchanged"],
         weights=[0.88, 0.04, 0.05, 0.03],
     )[0]
+
+
+def _value_bucket(total: float) -> str:
+    if total < 60:
+        return "low"
+    if total < 250:
+        return "mid"
+    return "high"
+
+
+def _pick_items(rng: random.Random, products: dict[str, Product], order_id: str) -> list[OrderItem]:
+    product_ids = list(products.keys())
+    n_items = rng.choices([1, 2, 3], weights=[0.55, 0.3, 0.15])[0]
+    items = []
+    for item_idx in range(n_items):
+        pid = rng.choice(product_ids)
+        price = products[pid].price
+        qty = rng.choices([1, 2], weights=[0.8, 0.2])[0]
+        items.append(OrderItem(item_id=f"{order_id}_item_{item_idx}", product_id=pid, price=price, qty=qty))
+    return items
+
+
+def _pick_items_in_bucket(
+    rng: random.Random, products: dict[str, Product], order_id: str, bucket: str, max_tries: int = 50
+) -> list[OrderItem]:
+    """Retries random item selection until the resulting total lands in the
+    requested value bucket -- used to guarantee task-generation coverage
+    for grid cells a purely random population wouldn't reliably fill
+    (see _reserve_orders_for_task_coverage)."""
+    best = None
+    best_gap = float("inf")
+    for _ in range(max_tries):
+        items = _pick_items(rng, products, order_id)
+        total = round(sum(i.price * i.qty for i in items), 2)
+        if _value_bucket(total) == bucket:
+            return items
+        gap = 0.0 if bucket == "mid" else abs(total - (60.0 if bucket == "low" else 250.0))
+        if gap < best_gap:
+            best, best_gap = items, gap
+    return best
+
+
+def _reserve_orders_for_task_coverage(
+    rng: random.Random, customers: dict[str, Customer], products: dict[str, Product]
+) -> list[Order]:
+    """gen_refunds_tasks.py's grid needs categories a purely random
+    population doesn't reliably produce enough of: pending orders spread
+    across all three value tiers (for the cancel-request grid), shipped
+    orders (R6-on-shipped cases), and delivered orders whose customer has
+    prior_refunds_12m>=2 within the refund window (R8 cases). Measured
+    directly: even after widening the "recent" age bucket
+    (_status_for_age), a from-scratch run still left some grid cells
+    (e.g. cancel x high-value) with zero matching orders. Rather than keep
+    tuning random weights and hoping, reserve a small number of orders
+    with these properties forced explicitly."""
+    now = _current_time()
+    customer_ids = list(customers.keys())
+    reserved: list[Order] = []
+    idx = 0
+
+    def _next_id() -> str:
+        nonlocal idx
+        order_id = f"order_r{idx:03d}"
+        idx += 1
+        return order_id
+
+    # 27 pending orders, 9 per value bucket -- gen_refunds_tasks.py's grid
+    # treats "window" as a real (if functionally inert for cancel-type
+    # requests) axis, so a single (value, stance) pair is drawn against by
+    # 3 separate grid cells (one per window label) each needing their own
+    # order once used. 9 = 3 windows x 3 stances per value bucket,
+    # guaranteeing every cancel x value x stance x window cell can be
+    # filled without reuse. Spread across customers with varying
+    # prior_refunds_12m (irrelevant to R6/cancel but keeps variety).
+    for bucket in ("low", "mid", "high"):
+        for _ in range(9):
+            order_id = _next_id()
+            customer_id = rng.choice(customer_ids)
+            customer = customers[customer_id]
+            items = _pick_items_in_bucket(rng, products, order_id, bucket)
+            days_old = rng.randint(0, 4)
+            created_at = now - timedelta(days=days_old, hours=rng.randint(0, 23))
+            reserved.append(
+                Order(
+                    order_id=order_id,
+                    customer_id=customer_id,
+                    items=items,
+                    total=round(sum(i.price * i.qty for i in items), 2),
+                    status="pending",
+                    created_at=created_at.isoformat(),
+                    delivered_at=None,
+                    payment_method_id=rng.choice(customer.payment_methods).id,
+                    damage_reported=False,
+                    prior_refunds_12m=rng.choices([0, 1, 2, 3], weights=[0.55, 0.25, 0.13, 0.07])[0],
+                )
+            )
+
+    # 15 shipped orders (guide needs >=10 for the R6 cases).
+    for _ in range(15):
+        order_id = _next_id()
+        customer_id = rng.choice(customer_ids)
+        customer = customers[customer_id]
+        items = _pick_items(rng, products, order_id)
+        days_old = rng.randint(3, 6)
+        created_at = now - timedelta(days=days_old, hours=rng.randint(0, 23))
+        reserved.append(
+            Order(
+                order_id=order_id,
+                customer_id=customer_id,
+                items=items,
+                total=round(sum(i.price * i.qty for i in items), 2),
+                status="shipped",
+                created_at=created_at.isoformat(),
+                delivered_at=None,
+                payment_method_id=rng.choice(customer.payment_methods).id,
+                damage_reported=False,
+                prior_refunds_12m=rng.choices([0, 1, 2, 3], weights=[0.55, 0.25, 0.13, 0.07])[0],
+            )
+        )
+
+    # 20 delivered, within-60-days, total>100, frequent-refunder orders
+    # (guide needs >=15 R8 cases).
+    for _ in range(20):
+        order_id = _next_id()
+        customer_id = rng.choice(customer_ids)
+        customer = customers[customer_id]
+        items = _pick_items_in_bucket(rng, products, order_id, rng.choice(["mid", "high"]))
+        days_old = rng.randint(10, 55)
+        created_at = now - timedelta(days=days_old, hours=rng.randint(0, 23))
+        delivery_lag = rng.randint(2, 6)
+        delivered_at = created_at + timedelta(days=delivery_lag)
+        reserved.append(
+            Order(
+                order_id=order_id,
+                customer_id=customer_id,
+                items=items,
+                total=round(sum(i.price * i.qty for i in items), 2),
+                status="delivered",
+                created_at=created_at.isoformat(),
+                delivered_at=delivered_at.isoformat(),
+                payment_method_id=rng.choice(customer.payment_methods).id,
+                damage_reported=rng.random() < 0.12,
+                prior_refunds_12m=rng.choices([2, 3], weights=[0.6, 0.4])[0],
+            )
+        )
+
+    return reserved
 
 
 def _gen_orders(
@@ -132,25 +288,16 @@ def _gen_orders(
     }
 
     orders: dict[str, Order] = {}
-    for i in range(_N_ORDERS):
+    n_random = _N_ORDERS - 62  # 62 reserved for guaranteed task-coverage categories
+    for i in range(n_random):
         order_id = f"order_{i:04d}"
         customer_id = rng.choice(customer_ids)
         customer = customers[customer_id]
         days_old = rng.randint(0, 120)
         created_at = now - timedelta(days=days_old, hours=rng.randint(0, 23))
 
-        n_items = rng.choices([1, 2, 3], weights=[0.55, 0.3, 0.15])[0]
-        items = []
-        total = 0.0
-        for item_idx in range(n_items):
-            pid = rng.choice(product_ids)
-            price = products[pid].price
-            qty = rng.choices([1, 2], weights=[0.8, 0.2])[0]
-            items.append(
-                OrderItem(item_id=f"{order_id}_item_{item_idx}", product_id=pid, price=price, qty=qty)
-            )
-            total += price * qty
-        total = round(total, 2)
+        items = _pick_items(rng, products, order_id)
+        total = round(sum(i.price * i.qty for i in items), 2)
 
         status = _status_for_age(rng, days_old)
         delivered_at = None
@@ -176,6 +323,10 @@ def _gen_orders(
             damage_reported=damage_reported,
             prior_refunds_12m=prior_refunds_by_customer[customer_id],
         )
+
+    for order in _reserve_orders_for_task_coverage(rng, customers, products):
+        orders[order.order_id] = order
+
     return orders
 
 
