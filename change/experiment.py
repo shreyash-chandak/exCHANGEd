@@ -11,9 +11,16 @@ from change.loop import GovernanceLoop
 from change.metrics import compute_metrics
 
 CONDITIONS = {
-    "d1": {"feedback": "truth", "policy_update_at_t": None},
-    "d2": {"feedback": "satisfaction", "policy_update_at_t": None},
-    "d3": {"feedback": "truth", "policy_update_at_t": 300},
+    "d1": {"feedback": "truth", "policy_update_at_episode": None},
+    "d2": {"feedback": "satisfaction", "policy_update_at_episode": None},
+    # Owner-authorized revision (docs/checkpoints/phase-3.md): D3 now learns
+    # from `satisfaction` feedback (not `truth`) so the memory it accumulates
+    # before the policy tightens is reliably generosity-biased -- under
+    # `truth` feedback most positive-feedback lessons came from non-generous
+    # compliant actions, so the intended "stale memory causes violations
+    # after the policy update" story didn't reproduce. Gated on episode
+    # count (see MockRetailEnv.policy_update_at_episode), not t_global.
+    "d3": {"feedback": "satisfaction", "policy_update_at_episode": 200},
 }
 
 
@@ -63,7 +70,10 @@ def run_cell(
     else:
         cond = CONDITIONS[condition]
         env = MockRetailEnv(
-            n_tasks=n_tasks, seed=seed, run_id=run_id, policy_update_at_t=cond["policy_update_at_t"]
+            n_tasks=n_tasks,
+            seed=seed,
+            run_id=run_id,
+            policy_update_at_episode=cond["policy_update_at_episode"],
         )
         loop = GovernanceLoop(
             env,

@@ -30,7 +30,10 @@ def main(
 
     cond = CONDITIONS[condition]
     mock_env = MockRetailEnv(
-        n_tasks=n_tasks, seed=seed, run_id=run_id, policy_update_at_t=cond["policy_update_at_t"]
+        n_tasks=n_tasks,
+        seed=seed,
+        run_id=run_id,
+        policy_update_at_episode=cond["policy_update_at_episode"],
     )
     loop = GovernanceLoop(
         mock_env,

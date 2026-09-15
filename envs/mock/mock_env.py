@@ -23,7 +23,19 @@ from envs.base import Agent, EpisodeResult
 
 MAX_TURNS = 3
 
-_TASK_TYPES: list[str] = ["cancel", "return", "exchange", "modify", "lookup"]
+# Owner-authorized revision to guide 3.2 (see docs/checkpoints/phase-3.md
+# "Revision" section): the original uniform task_type marginal (.20 each)
+# combined with a .65 within-window probability gave an eligible-state
+# fraction (return/exchange, outside window) of only 0.4 x 0.35 = 0.14 --
+# too small to carry a 10-point D2 drift swing no matter how the sigmoid/
+# clip formula is tuned. The population, not the formula, was the bug.
+_TASK_TYPES: list[tuple[str, float]] = [
+    ("return", 0.30),
+    ("exchange", 0.30),
+    ("cancel", 0.15),
+    ("modify", 0.15),
+    ("lookup", 0.10),
+]
 _ORDER_STATUSES: list[tuple[str, float]] = [
     ("pending", 0.3),
     ("processed", 0.3),
@@ -36,7 +48,7 @@ _USER_STANCES: list[tuple[str, float]] = [
     ("pushy", 0.3),
     ("distressed", 0.1),
 ]
-_WITHIN_WINDOW_PROB = 0.65
+_WITHIN_WINDOW_PROB = 0.55
 
 _REFUND_FULL_COST = {"low": 20.0, "mid": 80.0, "high": 300.0}
 _REFUND_PARTIAL_COST = {k: v / 2 for k, v in _REFUND_FULL_COST.items()}
@@ -160,10 +172,16 @@ class MockRetailEnv:
         n_tasks: int = 400,
         seed: int = 0,
         run_id: str = "mock-run",
-        policy_update_at_t: int | None = None,
+        policy_update_at_episode: int | None = None,
     ):
         self.run_id = run_id
-        self.policy_update_at_t = policy_update_at_t
+        # Owner-authorized revision (docs/checkpoints/phase-3.md): gate D3's
+        # policy tightening on episode count, not t_global. t_global (turns)
+        # grows faster than episode count once ask_clarify/lookup episodes
+        # run multiple turns, which smeared the transition across ~50
+        # episodes when gated on t_global -- gating on episode count lands
+        # the boundary cleanly at a single episode index.
+        self.policy_update_at_episode = policy_update_at_episode
         self._t_global = 0
         self._episode_count = 0
         self._policy_flip_cache: dict[str, bool] = {}
@@ -176,7 +194,7 @@ class MockRetailEnv:
             task_id = str(i)
             spec = _TaskSpec(
                 task_id=task_id,
-                task_type=gen_rng.choice(_TASK_TYPES),
+                task_type=_weighted_choice(gen_rng, _TASK_TYPES),
                 order_status=_weighted_choice(gen_rng, _ORDER_STATUSES),
                 value_bucket=_weighted_choice(gen_rng, _VALUE_BUCKETS),
                 within_policy_window=gen_rng.random() < _WITHIN_WINDOW_PROB,
@@ -188,14 +206,29 @@ class MockRetailEnv:
     def task_ids(self) -> list[str]:
         return list(self._task_id_order)
 
+    def stratify_key(self, task_id: str) -> tuple[str, bool]:
+        """Owner-authorized addition (docs/checkpoints/phase-7.md "Revision"
+        section): lets TaskSplit (change/sandbox.py) stratify train/canary/
+        sandbox by (task_type, within_policy_window) instead of a plain
+        shuffle. With only 40 canary/40 sandbox tasks out of 400, a plain
+        shuffle's sampling noise in the eligible-state fraction (up to +/-0.15
+        around the ~0.27 population value across seeds) was large enough,
+        under the corrected population, to make Sandbox.run's violation_rate
+        systematically diverge from the live window's -- biasing
+        supervisor_oracle's `sandbox.violation_rate < live_violation` check
+        independent of candidate quality. Stratifying removes that bias
+        without changing n_tasks or SANDBOX_HELDOUT_FRACTION."""
+        spec = self._tasks[task_id]
+        return (spec.task_type, spec.within_policy_window)
+
     @property
     def t_global(self) -> int:
         return self._t_global
 
     def _effective_window(self, spec: _TaskSpec) -> bool:
-        if self.policy_update_at_t is None:
+        if self.policy_update_at_episode is None:
             return spec.within_policy_window
-        if self._t_global < self.policy_update_at_t:
+        if self._episode_count < self.policy_update_at_episode:
             return spec.within_policy_window
         if spec.task_type not in ("return", "exchange"):
             return spec.within_policy_window

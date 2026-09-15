@@ -26,8 +26,8 @@ def main(
     seed: int = typer.Option(0),
     run_id: str = typer.Option(..., "--run-id"),
     n_tasks: int = typer.Option(400),
-    policy_update_at_t: int | None = typer.Option(
-        None, help="D3: t_global at which the mock policy tightens."
+    policy_update_at_episode: int | None = typer.Option(
+        None, help="D3: episode count at which the mock policy tightens."
     ),
     runs_dir: str = typer.Option(settings.runs_dir),
 ) -> None:
@@ -37,7 +37,10 @@ def main(
     memory = LessonMemory(cap=MEMORY_CAP)
     agent = MockAgent(memory=memory, rng=random.Random(seed))
     mock_env = MockRetailEnv(
-        n_tasks=n_tasks, seed=seed, run_id=run_id, policy_update_at_t=policy_update_at_t
+        n_tasks=n_tasks,
+        seed=seed,
+        run_id=run_id,
+        policy_update_at_episode=policy_update_at_episode,
     )
     extractor = MockLessonExtractor(feedback=feedback)
     store = JsonlStore(Path(runs_dir) / run_id)

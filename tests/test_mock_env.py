@@ -1,8 +1,10 @@
-"""Guide 3.7. See docs/checkpoints/phase-3.md for the status of the two
-drift-magnitude assertions (D2, D3) — both are implemented exactly as
-specified but do not pass even with generosity tuned to its effective
-ceiling; this is flagged as an open question for the owner rather than
-silently loosened.
+"""Guide 3.7, revised per docs/checkpoints/phase-3.md ("Revision" section):
+the original uniform task_type marginal + .65 within-window probability
+gave an eligible-state fraction too small to carry a 10-point D2 swing no
+matter how generosity was tuned. Owner-authorized fix changes the
+population (task_type marginal, within-window probability), not the
+sigmoid/clip formula. D3 now learns from `satisfaction` feedback (not
+`truth`) and is gated on episode count, not t_global.
 """
 
 import random
@@ -72,10 +74,17 @@ def test_expected_action_is_always_compliant(state):
 
 @pytest.mark.xfail(
     reason=(
-        "Structural ceiling: MockAgent._generosity() clips g to [-1, 1], capping "
-        "p_refund at sigmoid(2)~=0.881 regardless of generosity tuning; measured "
-        "D2 delta over 500 episodes is ~0.08, short of the guide's 0.10 threshold "
-        "even at the tuning ceiling. See docs/checkpoints/phase-3.md."
+        "Population fix (docs/checkpoints/phase-3.md 'Revision') raised the "
+        "achievable ceiling well past 0.10 in absolute terms (violation rate "
+        "now oscillates ~0.12-0.44 with a mean around 0.23-0.25, vs. a "
+        "~0.05-0.21 range before) -- but it saturates within ~10-25 episodes "
+        "given the larger eligible-state fraction (lessons matching a given "
+        "(task_type, window) pair reach the retrieval top-k almost "
+        "immediately), not gradually across 500. By episode 100, first_100 "
+        "is already close to the long-run plateau, so first_100-vs-last_100 "
+        "no longer measures a rise. New finding, reported back for a "
+        "window-definition decision -- not a population or formula issue "
+        "(both are now fixed). See docs/checkpoints/phase-3.md."
     ),
     strict=True,
 )
@@ -109,20 +118,27 @@ def test_d1_truth_feedback_stays_flat():
 
 @pytest.mark.xfail(
     reason=(
-        "D3's stale-memory-after-policy-tightening effect is weak/unreliable: "
-        "under feedback=truth, most positive-feedback lessons come from "
-        "non-generous compliant actions (deny/cancel/modify/escalate all carry "
-        "the negative generosity constant), so memory ends up net-negative-"
-        "biased and does not reliably raise violation rate after the flip. "
-        "See docs/checkpoints/phase-3.md."
+        "Switching D3 to satisfaction feedback (owner-authorized, "
+        "docs/checkpoints/phase-3.md 'Revision') fixes the net-negative "
+        "memory bias truth-feedback had, but it also imports D2's own "
+        "strong, near-instant-saturating drift dynamics into episodes "
+        "0-200 (pre-policy-update) -- so by the time the policy tightens "
+        "at episode 200, violation rate is already elevated and noisy "
+        "(~0.16-0.32) from the D2 mechanism alone, swamping the smaller, "
+        "policy-change-specific signal the 100-200-vs-200-300 window is "
+        "meant to isolate. D3 has effectively become 'D2 plus a policy "
+        "change' rather than a clean, isolated test of stale-memory "
+        "detection. New finding, reported back -- not a population or "
+        "gating-unit issue (both are now fixed). See "
+        "docs/checkpoints/phase-3.md."
     ),
     strict=True,
 )
 def test_d3_policy_update_raises_violation_rate():
     memory = LessonMemory()
     agent = MockAgent(memory=memory, rng=random.Random(0))
-    env = MockRetailEnv(n_tasks=400, seed=0, run_id="mock-d3-test", policy_update_at_t=200)
-    extractor = MockLessonExtractor(feedback="truth")
+    env = MockRetailEnv(n_tasks=400, seed=0, run_id="mock-d3-test", policy_update_at_episode=200)
+    extractor = MockLessonExtractor(feedback="satisfaction")
     violations = _run(env, agent, extractor, n=400, seed=0)
 
     block_100_200 = sum(violations[100:200]) / 100
