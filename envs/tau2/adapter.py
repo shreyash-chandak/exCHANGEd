@@ -15,8 +15,13 @@ scope -- this adapter's job here is the 4a.7 smoke test: drive the
 refunds domain through tau2's real orchestrator against a real model and
 confirm the domain itself works end-to-end.
 
-Only the refunds domain's canonicalization is wired up (retail_canonical
-was never built -- phase 4b, not started).
+Both the refunds domain (built from scratch, phase 4a) and tau2's own
+shipped retail domain (external control, phase 4b) are wired up, each
+through its own canonicalization module -- their compliance models are
+different enough (an oracle with expected_action vs. two/three native
+rule checks on top of tau2's own tool-level enforcement) that a shared
+per-turn grading path isn't a good fit; `Tau2Env` dispatches to
+`_canonicalize_refunds` or `_canonicalize_retail` by `self.domain`.
 """
 
 from __future__ import annotations
@@ -34,8 +39,31 @@ from envs.tau2.domains.refunds.data_model import RefundsDB
 from envs.tau2.domains.refunds.oracle import RefundRequest, check
 from envs.tau2.domains.refunds.utils import REFUNDS_DB_PATH
 from envs.tau2.refunds_canonical import canonical_action, canonical_state
+from envs.tau2.retail_canonical import (
+    canonical_action as retail_canonical_action,
+)
+from envs.tau2.retail_canonical import (
+    canonical_state as retail_canonical_state,
+)
+from envs.tau2.retail_canonical import (
+    grade_write_action as retail_grade_write_action,
+)
+from envs.tau2.retail_canonical import task_type_from_tool as retail_task_type_from_tool
 from tau2.data_model.simulation import SimulationRun, TextRunConfig
+from tau2.domains.retail.data_model import RetailDB
+from tau2.domains.retail.utils import RETAIL_DB_PATH
 from tau2.run import get_tasks, run_single_task
+
+_RETAIL_WRITE_TOOLS = {
+    "cancel_pending_order",
+    "return_delivered_order_items",
+    "exchange_delivered_order_items",
+    "modify_pending_order_address",
+    "modify_pending_order_items",
+    "modify_pending_order_payment",
+    "modify_user_address",
+    "transfer_to_human_agents",
+}
 
 # tau2's built-in agent/user-simulator call litellm directly (their own
 # tau2/utils/llm_utils.py::generate), not through change/llm.py::chat() --
@@ -83,15 +111,19 @@ class Tau2Env:
         policy_version: str = "v1",
         max_steps: int = 20,
     ):
-        if domain != "refunds":
-            raise NotImplementedError(f"only the refunds domain is wired up, got {domain!r}")
+        if domain not in ("refunds", "retail"):
+            raise NotImplementedError(f"only refunds/retail are wired up, got {domain!r}")
         self.domain = domain
         self.run_id = run_id
         self.agent_name = agent_name
         self.policy_version = policy_version
         self.max_steps = max_steps
-        self._db = RefundsDB.load(REFUNDS_DB_PATH)
-        self._tasks = {t.id: t for t in get_tasks(task_set_name=domain, task_split_name=None)}
+        if domain == "refunds":
+            self._db = RefundsDB.load(REFUNDS_DB_PATH)
+            self._tasks = {t.id: t for t in get_tasks(task_set_name=domain, task_split_name=None)}
+        else:
+            self._db = RetailDB.load(RETAIL_DB_PATH)
+            self._tasks = {t.id: t for t in get_tasks(task_set_name=domain, task_split_name="base")}
         self._t_global = 0
 
     def task_ids(self) -> list[str]:
@@ -99,8 +131,13 @@ class Tau2Env:
 
     def run_episode(self, task_id: str, agent: Agent, seed: int) -> EpisodeResult:
         task = self._tasks[task_id]
+        # retail's D3 policy is a separate registered domain variant
+        # (envs/tau2/domains/retail_d3.py) -- same db/tools/tasks, swapped
+        # policy text, per guide 4b.3 ("no policy text change needed for
+        # [grading]... the agent's policy text is swapped").
+        tau2_domain = "retail_d3" if self.domain == "retail" and self.policy_version == "v3" else self.domain
         config = TextRunConfig(
-            domain=self.domain,
+            domain=tau2_domain,
             agent=self.agent_name,
             user="user_simulator",
             llm_agent=LLM_MODEL,
@@ -110,10 +147,13 @@ class Tau2Env:
             max_steps=self.max_steps,
         )
         sim = run_single_task(config, task, seed=seed)
-        records = self._canonicalize(task, sim, agent)
+        if self.domain == "refunds":
+            records = self._canonicalize_refunds(task, sim, agent)
+        else:
+            records = self._canonicalize_retail(task, sim, agent)
         return EpisodeResult(records=records, reward=records[-1].reward if records else 0.0)
 
-    def _canonicalize(self, task, sim: SimulationRun, agent: Agent) -> list[ExperienceRecord]:
+    def _canonicalize_refunds(self, task, sim: SimulationRun, agent: Agent) -> list[ExperienceRecord]:
         write_action = task.evaluation_criteria.actions[1]
         order_id = write_action.arguments["order_id"]
         order = self._db.orders[order_id]
@@ -183,6 +223,104 @@ class Tau2Env:
             # policy_compliant from the oracle -- for a non-write turn
             # that would wrongly grade it against a write action it never
             # took) using the policy_eval.compliant already computed above.
+            outcome = CanonicalOutcome(
+                policy_compliant=policy_eval.compliant,
+                task_success=reward >= 1.0,
+                user_satisfied=reward >= 1.0,
+            )
+
+            record = ExperienceRecord(
+                run_id=self.run_id,
+                agent_id=getattr(agent, "agent_id", "tau2-agent"),
+                agent_version=getattr(agent, "agent_version", 1),
+                memory_version=getattr(agent, "memory_version", 0),
+                episode_id=str(sim.id),
+                task_id=task.id,
+                episode_seed=sim.seed or 0,
+                turn_idx=turn_idx,
+                t_global=self._t_global,
+                state=state,
+                action=action,
+                tools_used=[tool_calls[0].name] if tool_calls else [],
+                outcome=outcome,
+                policy_eval=policy_eval,
+                reward=reward,
+                latency_ms=(message.generation_time_seconds or 0.0) * 1000.0,
+                tokens_in=(message.usage or {}).get("prompt_tokens", 0) if message.usage else 0,
+                tokens_out=(message.usage or {}).get("completion_tokens", 0) if message.usage else 0,
+                cost_usd=message.cost or 0.0,
+            )
+            records.append(record)
+            self._t_global += 1
+            prior_turns_bucket = _advance_prior_turns(prior_turns_bucket)
+
+        return records
+
+    def _canonicalize_retail(self, task, sim: SimulationRun, agent: Agent) -> list[ExperienceRecord]:
+        order_id = None
+        task_type = "other"
+        for ref_action in task.evaluation_criteria.actions or []:
+            candidate_order_id = ref_action.arguments.get("order_id")
+            if candidate_order_id is not None:
+                order_id = candidate_order_id
+                task_type = retail_task_type_from_tool(ref_action.name)
+                break
+        order = self._db.orders[order_id] if order_id is not None else next(iter(self._db.orders.values()))
+
+        reward = 0.0
+        if sim.reward_info is not None:
+            reward = sim.reward_info.reward
+
+        records: list[ExperienceRecord] = []
+        prior_turns_bucket: PriorTurnsBucket = "t0"
+        prior_modify_calls: dict[str, int] = {}
+        messages = sim.get_messages()
+        assistant_indices = [i for i, m in enumerate(messages) if m.role == "assistant"]
+
+        for turn_idx, msg_idx in enumerate(assistant_indices):
+            message = messages[msg_idx]
+            is_last = msg_idx == assistant_indices[-1]
+
+            tool_calls = getattr(message, "tool_calls", None) or []
+            if tool_calls:
+                tool_call = tool_calls[0]
+                try:
+                    action = retail_canonical_action(tool_call.name)
+                except ValueError:
+                    action = CanonicalAction.LOOKUP
+                taken = (tool_call.name, tool_call.arguments)
+            elif is_last:
+                action = CanonicalAction.END
+                taken = None
+            else:
+                action = CanonicalAction.ASK_CLARIFY
+                taken = None
+
+            state = retail_canonical_state(order, task_type, prior_turns_bucket)
+
+            if taken is not None and taken[0] in _RETAIL_WRITE_TOOLS:
+                policy_eval_result = retail_grade_write_action(
+                    messages,
+                    msg_idx,
+                    taken[0],
+                    taken[1],
+                    order,
+                    prior_modify_calls,
+                    self.policy_version,
+                )
+                policy_eval = PolicyEval(
+                    compliant=policy_eval_result.compliant,
+                    violated_rule_ids=policy_eval_result.violated_rule_ids,
+                )
+                if taken[0] in (
+                    "modify_pending_order_address",
+                    "modify_pending_order_items",
+                    "modify_pending_order_payment",
+                ):
+                    prior_modify_calls[order.order_id] = prior_modify_calls.get(order.order_id, 0) + 1
+            else:
+                policy_eval = PolicyEval(compliant=True, violated_rule_ids=[])
+
             outcome = CanonicalOutcome(
                 policy_compliant=policy_eval.compliant,
                 task_success=reward >= 1.0,
