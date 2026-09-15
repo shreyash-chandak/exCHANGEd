@@ -1,160 +1,151 @@
 # CHANGE PoC — status
 
-Last updated: 2026-09-15 (session 2, Claude Sonnet 5). **PoC complete per the guide's
-own definition of done** (guide section 4), modulo the items in "What's not done"
-below — all of which are the owner's call, not further coding work. This session
-implemented the owner's answers to the open questions from session 1 (Q3, Q5 and
-its three sub-decisions, Q6, Q7) and found/fixed three real bugs those answers
-exposed along the way.
+Last updated: 2026-09-15 (session 2, Claude Sonnet 5). Session-1 PoC was complete per
+the original guide's definition of done. This session first implemented the owner's
+answers to session 1's open questions (Q3, Q5 + sub-decisions, Q6, Q7), then the owner
+supplied `context/CHANGE_poc_agent_guide-2.md` (session-2 guide, wins on conflicts with
+session 1) which restated those decisions with an exact spec and added phase 4.0-4d.
+**Phase 4.0 of the session-2 guide is now complete and tagged `phase-4.0-done`.**
 
 ## What this is
 
 Implementation of the CHANGE governance-loop PoC per `context/CHANGE_poc_agent_guide.md`
-(the literal build spec) and `context/approach1.md` (the research plan it implements).
-Repo root doubles as `change-poc` — built directly here rather than a separate nested
-repo, since `context/` already held the planning docs. Branch `shreyash` (not merged to
-`main` — see "What's not done").
+(session-1 literal build spec), `context/CHANGE_poc_agent_guide-2.md` (session-2 guide,
+adds decisions + phases 4.0-4d, wins on conflicts), and `context/approach1.md` (the
+research plan both implement). Repo root doubles as `change-poc`. Branch `shreyash`
+(not merged to `main`).
 
 ## Where things stand
 
-**Phases 0, 1, 2, 3, 5, 6, 7, 8 done and tagged.** Phase 4 (tau2 adapter) still not
-started — still blocked on owner decisions (one of four questions from phase 1 is now
-answered, see below); `docs/checkpoints/phase-4.md` documents why. Phase 9 (Harmonize,
-optional) not started per the guide's own "only start if the owner says so."
+**Session-1 phases 0, 1, 2, 3, 5, 6, 7, 8 done and tagged. Session-2 phase 4.0 done and
+tagged `phase-4.0-done`.** Next up per the session-2 guide's own ordering: phase 4.1
+(local model serving), not started.
 
-`make test` (`uv run pytest -q -m "not live"`) is green: **1421 passed, 4 xfailed**
-(all tests now run in one `pytest` invocation, including `test_loop.py` — no longer
-needs a separate run; full suite takes ~30s).
+`make test` (`uv run pytest -q -m "not live"`) is green: **1421 passed, 4 xfailed**,
+~30-40s for the whole suite in one invocation.
 
-- **Phases 0–2**: unchanged from session 1 — see prior status or `docs/checkpoints/phase-{0,1,2}.md`.
-- **Phase 3** (mock environment): population revised this session (see below). `docs/checkpoints/phase-3.md`.
-- **Phase 5** (Contextualize): `Snapshotter` simplified this session (see below). `docs/checkpoints/phase-5.md`.
-- **Phase 6** (Anticipate): envelope baseline revised this session (see below). `docs/checkpoints/phase-6.md`.
-- **Phase 7** (Generate/Sandbox/Negotiate/Evolve/loop): two real bugs found and fixed
-  this session, one genuine finding documented. `docs/checkpoints/phase-7.md`.
-- **Phase 8** (experiment grid + metrics): grid re-run this session at a uniform,
-  publication-scale simulation setting. `docs/checkpoints/phase-8.md`.
+- **Session-1 phases 0–2**: unchanged — see `docs/checkpoints/phase-{0,1,2}.md`.
+- **Phase 3** (mock environment): population revised. `docs/checkpoints/phase-3.md`.
+- **Phase 5** (Contextualize): `Snapshotter` simplified. `docs/checkpoints/phase-5.md`.
+- **Phase 6** (Anticipate): envelope baseline revised, extracted into a shared helper.
+  `docs/checkpoints/phase-6.md`.
+- **Phase 7** (Generate/Sandbox/Negotiate/Evolve/loop): three real bugs found and fixed
+  (two in `TaskSplit`, one in `_seeded_rng`), root cause refined further in phase 8b.
+  `docs/checkpoints/phase-7.md`.
+- **Phase 8 / 8b** (experiment grid + metrics): grid re-run three times this session at
+  increasing scope/rigor — 18 cells (A0,A2,FULL) at 2000x2000, then the full 36-cell
+  grid (all six systems) at 1000x1000 after 2000x2000 was killed twice by real
+  system-wide memory pressure. `docs/checkpoints/phase-8.md`, `phase-8b.md`.
+- **Phase 4.0** (session-2 guide section 1): reconciled all of session 1's Q5/Q7 work
+  against the session-2 guide's exact spec (test naming, shared envelope-baseline
+  helper, `--serial` flag), verified the T1-vs-LastValue STOP gate clears, ran the full
+  36-cell grid. `docs/checkpoints/phase-4.0.md`, `phase-8b.md`.
 
-## This session's work (owner answered Q3/Q5/Q6/Q7 from the consolidated list; implemented exactly as specified)
+## Key findings this session (all reported, none silently tuned away)
 
-1. **D2/D3 mock population fix** (Q5 main, exact spec given): reweighted `_TASK_TYPES`
-   to `{return:.30, exchange:.30, cancel:.15, modify:.15, lookup:.10}`, dropped
-   `_WITHIN_WINDOW_PROB` to `.55`, switched D3 to `satisfaction` feedback gated on
-   episode count (not turn count). Eligible-state fraction rose from 0.14 to 0.27 as
-   calculated. **New finding**: the fix raised the achievable ceiling well past the
-   guide's threshold, but also made the drift saturate within ~10-25 episodes instead
-   of ramping across 500 — so the D2/D3 "first-vs-last-window" magnitude tests remain
-   `xfail`, now for this new, correctly-diagnosed reason (not the old ceiling issue).
-   Reported back; window redefinition is a modeling decision, not made unilaterally.
-   `docs/checkpoints/phase-3.md`.
-2. **Snapshotter simplified** to window-count-only (Q5 downstream #1): the
-   memory-version-delta-10 trigger is gone; `change/loop.py` uses `Snapshotter`
-   directly again instead of its old bypass. `docs/checkpoints/phase-5.md`.
-3. **A0 threshold test loosened** (Q5 downstream #2): tolerates at most 1 spurious
-   trigger per 20 cycles instead of demanding exactly 0 — a property of A0's
-   deliberately un-debounced blunt check, not a bug. Now genuinely passes (`xfail`
-   removed). `docs/checkpoints/phase-7.md`.
-4. **Envelope baseline fixed to a 3-window mean** (Q5 downstream #3): fixed at the
-   run's first 3 windows, not just the first window's noisy values.
-   `docs/checkpoints/phase-6.md`.
-5. **Two real bugs found while investigating why FULL started losing to A0** after
-   the population fix (found by measuring, not assuming — `docs/checkpoints/phase-7.md`):
-   - `TaskSplit`'s plain shuffle under-sampled a 40-task canary/sandbox pool, biasing
-     its composition against `train`'s under the new, more sensitive population — fixed
-     by stratifying on `(task_type, within_policy_window)`.
-   - That stratification fix then left `train`/`canary`/`sandbox` as contiguous
-     per-stratum blocks instead of interleaved (found via a byte-identical-behavior
-     anomaly in the Q7 grid re-run) — fixed with a final shuffle per list.
-   - `_seeded_rng` used Python's per-process-randomized `hash()`, silently breaking
-     reproducibility of the loop's decision layer across runs of the same seed — fixed
-     with `zlib.crc32`.
-6. **Remaining FULL-vs-A0 gap under D2/D3 is a genuine, documented finding, not a bug**:
-   `Evolve`'s canary gate — verified against a small (~40-task) held-out sample —
-   rejects nearly every corrective candidate under the now-correctly-strong drift, on
-   either `ENVELOPE_VIOLATION_MAX` or `ENVELOPE_SUCCESS_DROP_MAX` depending on the
-   specific noisy canary draw, so `agent_version` rarely advances. A0's blunt,
-   unverified gate has no such check and wins on raw violation count while offering no
-   rollback guarantee. `test_loop.py`'s test for this is `xfail(strict)` with the full
-   root cause in its reason. Owner-authorized as a documented finding.
-7. **Q3 (tau2 registry) decision recorded**: register `LessonAgent` into
-   `tau2.registry.registry` at import time, no vendor edits — not yet actionable,
-   phase 4 still blocked on the other three phase-1 questions. `docs/checkpoints/phase-4.md`.
-8. **Q7 grid re-run**: all 9 original smoke cells plus seed 1 (18 cells), one uniform
-   `SIM_TRAJECTORIES=SIM_HORIZON=2000` setting (the guide's own default — this
-   machine held it fine this time), sequential cell-at-a-time as before.
-   `change/experiment.py` now records the effective `sim_trajectories`/`sim_horizon`
-   per cell as `summary.csv` columns, confirmed uniform across all 18 rows. The
-   corrected table (after the interleaving-bug fix) shows FULL with *more* cumulative
-   violations than A0 under D2/D3, consistently across both seeds — this is the real,
-   reproducible consequence of finding 6 above, not a settings artifact.
-   `docs/checkpoints/phase-8.md`.
-
-All of the above implemented from the owner's own specific technical instructions
-(exact reweighted population values, exact D3 mechanism swap, exact test tolerances,
-exact baseline-window count, exact grid scale) — nothing here was a unilateral design
-choice except the two follow-on bug fixes (TaskSplit interleaving, `_seeded_rng`),
-which were genuine bugs with no guide-protected constant involved.
+1. **D2/D3 population fix works past the guide's threshold, but the drift now
+   saturates in ~10-25 episodes instead of ramping across 500** — so the three
+   "first-vs-last-window" magnitude tests remain `xfail`, correctly diagnosed but not
+   yet resolved (needs a window-definition decision). `phase-3.md`, `phase-4.0.md`.
+2. **Three real bugs found and fixed**, none guide-protected-constant issues:
+   `TaskSplit`'s plain shuffle biased canary/sandbox composition (fixed: stratify by
+   `(task_type, within_policy_window)`); that fix then left splits as contiguous
+   per-stratum blocks instead of interleaved (fixed: shuffle each list after
+   stratifying); `_seeded_rng` used Python's per-process-randomized `hash()`, breaking
+   cross-run reproducibility (fixed: `zlib.crc32`). `phase-7.md`.
+3. **Full 36-cell grid (`phase-8b.md`) shows governance sophistication correlating
+   with *worse* raw cumulative violations under real drift**: A0 ~= A2 (best) < A3 <
+   A4 ~= FULL (worst) on D2/D3. Root cause refined from the earlier (18-cell) finding:
+   it's **Negotiate's `supervisor_oracle`** (present starting at A4) that's the primary
+   suppressor of adaptation rate, not specifically Evolve's canary gate as previously
+   attributed — A4 (Negotiate, no Evolve) already collapses adaptations to near-FULL's
+   levels; Evolve mainly adds the rollback mechanism on top.
+4. **Two new, previously-undiagnosed miscalibrations, visible now that A1/A2 are in
+   the grid for the first time**: A1 (JSD-drift-triggered) never adapts in any of its
+   6 cells — its threshold apparently never fires under the corrected population. A2
+   (forecast-lead-time-triggered) over-triggers on 18-20 of ~20 cycles in every
+   condition including the no-drift control, but is behaviorally inert once its fixed
+   gate first applies — produces cumulative violations identical to A0's, seed for
+   seed. `phase-8b.md`.
+5. **The 2000x2000 grid setting got killed by real system memory pressure twice**
+   (confirmed: Discord/browser/VS Code/memory-compression, never a Python process) —
+   both times the whole grid was discarded and restarted at 1000x1000 per the guide's
+   "do not mix" instruction, rather than resuming a partial run at a different scale.
+   Final grid is uniform 1000x1000, confirmed directly in `summary.csv`.
 
 ## What's not done (owner decisions, not further coding work)
 
-1. **Phase 4 (tau2 adapter) still not started** — Q3 (tau2 registry) is answered, but
-   three of the four phase-1 questions remain open (action/state taxonomy for real
-   retail tools, D3 retargeting for a status-gate policy, LLM budget/model choice).
-2. **Not merged to `main`** — everything is on branch `shreyash`.
-3. **Phase 9 (Harmonize) not started** — explicitly optional, owner-gated.
-4. **D2/D3/Contextualize-D2 magnitude tests remain `xfail`** — not because the
-   population fix failed (it worked, past the guide's own threshold), but because the
-   fix's stronger drift saturates faster than a "first-window-vs-last-window"
-   comparison can measure. A window-definition decision is needed if a clean pass is
-   wanted here; the mock env's job (letting phases 5-8 be built and tested at zero
-   cost) is otherwise unaffected.
-5. **The FULL-vs-A0 comparison under D2/D3 (`test_loop.py`, phase-8 grid table) now
-   shows FULL losing on raw cumulative violations**, for a well-understood, genuine
-   reason (`Evolve`'s canary gate can't confirm recovery against a small sample fast
-   enough under this drift severity), not a bug or settings artifact. Whether this is
-   an acceptable PoC-level finding or warrants an Evolve/canary design change (larger
-   canary sample, multi-cycle credit, different rollback policy) is the owner's call.
+1. **Phase 4.1 (local model serving) not started** — next per the session-2 guide's
+   ordering. Prerequisites checked and look favorable: GPU confirmed present (RTX
+   5060 Laptop, 8GB, matches the guide's assumption), and Ollama is already installed
+   with `qwen3.5:4b`/`9b`/`2b` already pulled — the guide's documented Ollama fallback
+   path could be used immediately with no download, as an alternative to the
+   llama.cpp/GGUF primary path.
+2. **Phase 4a (refunds domain + synthetic dataset), 4.2, 4b, 4c, 4d not started** —
+   all come after 4.1 in the guide's ordering, with explicit stop points along the way
+   that need the owner's reply before proceeding past them (session-2 guide section 9).
+3. **Not merged to `main`.**
+4. **Phase 9 (Harmonize) not started** — explicitly optional, owner-gated.
+5. **D2/D3/Contextualize-D2 magnitude tests remain `xfail`** (see finding 1 above) —
+   session-2 guide 4.0.3 explicitly said not to tune further if still failing after the
+   population fix, so left as a reported, unresolved finding.
+6. **The A0-A2-vs-A3-A4-FULL cumulative-violations pattern** (finding 3 above) and
+   **A1/A2's threshold miscalibrations** (finding 4 above) are documented but not
+   fixed — `DRIFT_ALERT_JSD`, `LEAD_TIME_TRIGGER`, `supervisor_oracle`'s comparison,
+   and `ENVELOPE_VIOLATION_MAX`/`ENVELOPE_SUCCESS_DROP_MAX` are all guide-specified and
+   left as-is pending owner input.
 
 ## Consolidated open questions for the owner
 
-**From phase 1 (blocks phase 4) — Q3 now answered, three remain:**
-1. How to adjust `CanonicalAction`/`CanonicalState` for retail's real tools?
-2. If retargeting D3 to a status-gating policy change: what should the specific policy
-   edit be?
-3. ~~OK to register a custom `LessonAgent` factory into `tau2.registry.registry`?~~
-   **Answered**: yes, at import time, no vendor edits.
-4. Budget and model choice for the agent/user-simulator LLMs?
+**From session-1 phase 1 (blocks phase 4a/4b's tau2 canonicalization) — Q3 answered,
+three remain:**
+1. How to adjust `CanonicalAction`/`CanonicalState` for retail's real tools? (Mostly
+   superseded by the session-2 guide's own decision to build a custom `refunds` domain
+   instead of forcing retail into the original schema — retail now only needs the
+   simpler "collapsed taxonomy, external control" treatment of guide phase 4b.)
+2. Budget and model choice for the agent/user-simulator LLMs, beyond what session-2
+   guide 4.1 already specifies (Qwen3.5 4B local)?
+3. ~~OK to register a custom `LessonAgent`/domain factory into `tau2.registry.registry`?~~
+   **Answered**: yes, at import time, no vendor edits — confirmed this session that
+   tau2's own registry uses exactly this decorator-at-import pattern already.
 
-**From this session's new findings:**
-5. Which window definition for the D2/D3/Contextualize-D2 magnitude tests, now that
-   the drift saturates within ~10-25 episodes rather than ramping across 500?
-   (`docs/checkpoints/phase-3.md`, `phase-5.md`.)
-6. Is FULL losing to A0 on raw cumulative violations under D2/D3 (well-diagnosed:
-   `Evolve`'s canary gate can't confirm recovery fast enough against a small sample)
-   an acceptable PoC-level finding, or does it warrant a design change to Evolve's
-   canary policy? (`docs/checkpoints/phase-7.md`, `phase-8.md`.)
+**From this session's grid findings, needing a decision before phase 8's table is
+paper-ready:**
+4. Window definition for the D2/D3/Contextualize-D2 magnitude tests (finding 1)?
+5. Is the A0/A2-beats-A3/A4/FULL pattern (finding 3) an acceptable PoC-level result, or
+   does `supervisor_oracle`/Evolve's canary policy need a design change (larger canary
+   sample, multi-cycle credit, different comparison)?
+6. Should A1's `DRIFT_ALERT_JSD` trigger or A2's `LEAD_TIME_TRIGGER` be revisited given
+   they're now measurably miscalibrated (never-fires / always-fires) under the
+   corrected population (finding 4)?
 
 **Still open, process-level:**
 7. Merge `shreyash` to `main`?
-8. Start phase 9 (Harmonize)?
+8. Proceed into phase 4.1 (local model serving) as the session-2 guide specifies next?
 
 ## Environment notes for next session
 
 - Native Windows toolchain (Git Bash + `uv`), not WSL.
-- `pytest` runs the full suite (including `test_loop.py`) in one invocation now,
-  ~30s — no longer needs to be run separately for timing reasons.
+- GPU: NVIDIA RTX 5060 Laptop, 8GB. Ollama already installed (v0.30.7) with
+  `qwen3.5:4b`/`9b`/`2b` pulled. `llama-server` not installed.
 - `runs/` is gitignored; grid re-runs should use a fresh/cleared output directory
   (`rm -rf runs/<name>` first) to avoid the resumable `DONE`-marker mechanism silently
   reusing stale pre-fix data.
-- If re-running the grid at 2000x2000: budget ~85s/cell for A0/A2, ~105s/cell for
-  FULL (measured this session) — an 18-cell grid takes ~30 minutes.
-- `TaskSplit` (`change/sandbox.py`) now stratifies by `env.stratify_key(task_id)` when
-  the env provides one, then shuffles each resulting list — both the stratification
-  *and* the final shuffle matter; removing either reintroduces a bug (composition bias
-  or blocky ordering respectively) documented in `docs/checkpoints/phase-7.md`.
+- This machine has hit real system-wide memory pressure during long grid runs twice
+  this session (not a code issue — other running applications). If a long run risks
+  memory pressure again, consider asking the owner to free memory first rather than
+  immediately dropping simulation scale below what the guide specifies.
+- `TaskSplit` (`change/sandbox.py`) stratifies by `env.stratify_key(task_id)` when the
+  env provides one, then shuffles each resulting list — both matter, removing either
+  reintroduces a documented bug (`phase-7.md`).
+- `change.anticipate.envelope.baseline_from_first_windows` is the single shared
+  implementation of the "mean over first 3 windows" envelope baseline — used by
+  `change/loop.py` and `scripts/run_anticipate.py`; extend rather than reimplement.
 
 ## Next step
 
-Nothing is technically blocking further *mock-env* work. The meaningful next steps all
-need the owner's input — see "Consolidated open questions" above, especially #5 and #6
-which are new this session.
+Per the session-2 guide's own ordering: phase 4.1 (local model serving — Qwen3.5 4B,
+llama.cpp primary / Ollama fallback, litellm entrypoint, concurrency). Owner input
+would help first on the open questions above, especially #5/#6 (whether to adjust any
+guide-specified thresholds before more grid time is spent) and #8 (green light to
+start 4.1).
