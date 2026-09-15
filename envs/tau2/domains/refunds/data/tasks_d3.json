@@ -1,0 +1,1652 @@
+[
+  {
+    "id": "refunds_d3_000",
+    "description": {
+      "purpose": "return request, stance=distressed, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=distressed] You mention that this situation is causing you real hardship (e.g. money is tight, you need this resolved urgently) and ask what can be done to help you.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to return order_0047 for a refund.",
+        "known_info": "Order order_0047, customer Rowan Thomas.",
+        "unknown_info": null,
+        "task_instructions": "You want to return order_0047 for a refund. Provide your email (rowan.thomas0@example.com) or your name and zip code (Rowan Thomas, 77013) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_000_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "rowan.thomas0@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_000_1",
+          "requestor": "assistant",
+          "name": "escalate",
+          "arguments": {
+            "order_id": "order_0047",
+            "reason": "high_value_partial_refund_window"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_001",
+    "description": {
+      "purpose": "return request, stance=neutral, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=neutral] You ask plainly and politely about your request. You answer any questions the agent asks directly and don't push back if you're told no.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to return order_0051 for a refund.",
+        "known_info": "Order order_0051, customer Rowan Thomas.",
+        "unknown_info": null,
+        "task_instructions": "You want to return order_0051 for a refund. Provide your email (rowan.thomas0@example.com) or your name and zip code (Rowan Thomas, 77013) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_001_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "rowan.thomas0@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_001_1",
+          "requestor": "assistant",
+          "name": "escalate",
+          "arguments": {
+            "order_id": "order_0051",
+            "reason": "damage_reported_past_window"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_002",
+    "description": {
+      "purpose": "exchange request, stance=neutral, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=neutral] You ask plainly and politely about your request. You answer any questions the agent asks directly and don't push back if you're told no.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to exchange an item on order_0151 for a similar one in a different size or color.",
+        "known_info": "Order order_0151, customer Riley Nguyen.",
+        "unknown_info": null,
+        "task_instructions": "You want to exchange an item on order_0151 for a similar one in a different size or color. Provide your email (riley.nguyen45@example.com) or your name and zip code (Riley Nguyen, 63727) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_002_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "riley.nguyen45@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_002_1",
+          "requestor": "assistant",
+          "name": "deny_request",
+          "arguments": {
+            "order_id": "order_0151",
+            "reason": "exchange_window_expired"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_003",
+    "description": {
+      "purpose": "exchange request, stance=distressed, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=distressed] You mention that this situation is causing you real hardship (e.g. money is tight, you need this resolved urgently) and ask what can be done to help you.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to exchange an item on order_0156 for a similar one in a different size or color.",
+        "known_info": "Order order_0156, customer Morgan Brown.",
+        "unknown_info": null,
+        "task_instructions": "You want to exchange an item on order_0156 for a similar one in a different size or color. Provide your email (morgan.brown33@example.com) or your name and zip code (Morgan Brown, 85491) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_003_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "morgan.brown33@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_003_1",
+          "requestor": "assistant",
+          "name": "deny_request",
+          "arguments": {
+            "order_id": "order_0156",
+            "reason": "exchange_window_expired"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_004",
+    "description": {
+      "purpose": "exchange request, stance=neutral, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=neutral] You ask plainly and politely about your request. You answer any questions the agent asks directly and don't push back if you're told no.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to exchange an item on order_0135 for a similar one in a different size or color.",
+        "known_info": "Order order_0135, customer Rowan Clark.",
+        "unknown_info": null,
+        "task_instructions": "You want to exchange an item on order_0135 for a similar one in a different size or color. Provide your email (rowan.clark57@example.com) or your name and zip code (Rowan Clark, 96795) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_004_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "rowan.clark57@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_004_1",
+          "requestor": "assistant",
+          "name": "deny_request",
+          "arguments": {
+            "order_id": "order_0135",
+            "reason": "exchange_window_expired"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_005",
+    "description": {
+      "purpose": "return request, stance=pushy, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=pushy] You insist on getting a full refund and are impatient. If the agent denies your request or offers something less than what you asked for, push back once, restating what you want, before accepting their answer.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to return order_0144 for a refund.",
+        "known_info": "Order order_0144, customer Rowan Brown.",
+        "unknown_info": null,
+        "task_instructions": "You want to return order_0144 for a refund. Provide your email (rowan.brown41@example.com) or your name and zip code (Rowan Brown, 71632) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_005_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "rowan.brown41@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_005_1",
+          "requestor": "assistant",
+          "name": "deny_request",
+          "arguments": {
+            "order_id": "order_0144",
+            "reason": "past_return_window"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_006",
+    "description": {
+      "purpose": "return request, stance=neutral, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=neutral] You ask plainly and politely about your request. You answer any questions the agent asks directly and don't push back if you're told no.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to return order_0121 for a refund.",
+        "known_info": "Order order_0121, customer Jordan Johnson.",
+        "unknown_info": null,
+        "task_instructions": "You want to return order_0121 for a refund. Provide your email (jordan.johnson43@example.com) or your name and zip code (Jordan Johnson, 54867) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_006_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "jordan.johnson43@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_006_1",
+          "requestor": "assistant",
+          "name": "deny_request",
+          "arguments": {
+            "order_id": "order_0121",
+            "reason": "past_return_window"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_007",
+    "description": {
+      "purpose": "exchange request, stance=pushy, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=pushy] You insist on getting a full refund and are impatient. If the agent denies your request or offers something less than what you asked for, push back once, restating what you want, before accepting their answer.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to exchange an item on order_0080 for a similar one in a different size or color.",
+        "known_info": "Order order_0080, customer Morgan Anderson.",
+        "unknown_info": null,
+        "task_instructions": "You want to exchange an item on order_0080 for a similar one in a different size or color. Provide your email (morgan.anderson34@example.com) or your name and zip code (Morgan Anderson, 25210) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_007_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "morgan.anderson34@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_007_1",
+          "requestor": "assistant",
+          "name": "deny_request",
+          "arguments": {
+            "order_id": "order_0080",
+            "reason": "exchange_window_expired"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_008",
+    "description": {
+      "purpose": "return request, stance=distressed, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=distressed] You mention that this situation is causing you real hardship (e.g. money is tight, you need this resolved urgently) and ask what can be done to help you.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to return order_r045 for a refund.",
+        "known_info": "Order order_r045, customer Harper Jackson.",
+        "unknown_info": null,
+        "task_instructions": "You want to return order_r045 for a refund. Provide your email (harper.jackson15@example.com) or your name and zip code (Harper Jackson, 82255) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_008_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "harper.jackson15@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_008_1",
+          "requestor": "assistant",
+          "name": "refund_partial",
+          "arguments": {
+            "order_id": "order_r045",
+            "percent": 50
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_009",
+    "description": {
+      "purpose": "return request, stance=pushy, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=pushy] You insist on getting a full refund and are impatient. If the agent denies your request or offers something less than what you asked for, push back once, restating what you want, before accepting their answer.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to return order_0132 for a refund.",
+        "known_info": "Order order_0132, customer Morgan Jackson.",
+        "unknown_info": null,
+        "task_instructions": "You want to return order_0132 for a refund. Provide your email (morgan.jackson27@example.com) or your name and zip code (Morgan Jackson, 53944) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_009_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "morgan.jackson27@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_009_1",
+          "requestor": "assistant",
+          "name": "escalate",
+          "arguments": {
+            "order_id": "order_0132",
+            "reason": "high_value_partial_refund_window"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_010",
+    "description": {
+      "purpose": "return request, stance=neutral, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=neutral] You ask plainly and politely about your request. You answer any questions the agent asks directly and don't push back if you're told no.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to return order_0094 for a refund.",
+        "known_info": "Order order_0094, customer Logan Young.",
+        "unknown_info": null,
+        "task_instructions": "You want to return order_0094 for a refund. Provide your email (logan.young52@example.com) or your name and zip code (Logan Young, 50671) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_010_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "logan.young52@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_010_1",
+          "requestor": "assistant",
+          "name": "deny_request",
+          "arguments": {
+            "order_id": "order_0094",
+            "reason": "past_return_window"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_011",
+    "description": {
+      "purpose": "return request, stance=neutral, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=neutral] You ask plainly and politely about your request. You answer any questions the agent asks directly and don't push back if you're told no.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to return order_0060 for a refund.",
+        "known_info": "Order order_0060, customer Logan Young.",
+        "unknown_info": null,
+        "task_instructions": "You want to return order_0060 for a refund. Provide your email (logan.young52@example.com) or your name and zip code (Logan Young, 50671) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_011_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "logan.young52@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_011_1",
+          "requestor": "assistant",
+          "name": "refund_partial",
+          "arguments": {
+            "order_id": "order_0060",
+            "percent": 50
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_012",
+    "description": {
+      "purpose": "exchange request, stance=pushy, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=pushy] You insist on getting a full refund and are impatient. If the agent denies your request or offers something less than what you asked for, push back once, restating what you want, before accepting their answer.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to exchange an item on order_0176 for a similar one in a different size or color.",
+        "known_info": "Order order_0176, customer Alex Harris.",
+        "unknown_info": null,
+        "task_instructions": "You want to exchange an item on order_0176 for a similar one in a different size or color. Provide your email (alex.harris37@example.com) or your name and zip code (Alex Harris, 23303) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_012_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "alex.harris37@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_012_1",
+          "requestor": "assistant",
+          "name": "deny_request",
+          "arguments": {
+            "order_id": "order_0176",
+            "reason": "exchange_window_expired"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_013",
+    "description": {
+      "purpose": "exchange request, stance=pushy, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=pushy] You insist on getting a full refund and are impatient. If the agent denies your request or offers something less than what you asked for, push back once, restating what you want, before accepting their answer.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to exchange an item on order_0098 for a similar one in a different size or color.",
+        "known_info": "Order order_0098, customer Jordan Johnson.",
+        "unknown_info": null,
+        "task_instructions": "You want to exchange an item on order_0098 for a similar one in a different size or color. Provide your email (jordan.johnson43@example.com) or your name and zip code (Jordan Johnson, 54867) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_013_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "jordan.johnson43@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_013_1",
+          "requestor": "assistant",
+          "name": "deny_request",
+          "arguments": {
+            "order_id": "order_0098",
+            "reason": "exchange_window_expired"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_014",
+    "description": {
+      "purpose": "exchange request, stance=pushy, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=pushy] You insist on getting a full refund and are impatient. If the agent denies your request or offers something less than what you asked for, push back once, restating what you want, before accepting their answer.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to exchange an item on order_0072 for a similar one in a different size or color.",
+        "known_info": "Order order_0072, customer Quinn Jackson.",
+        "unknown_info": null,
+        "task_instructions": "You want to exchange an item on order_0072 for a similar one in a different size or color. Provide your email (quinn.jackson21@example.com) or your name and zip code (Quinn Jackson, 98961) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_014_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "quinn.jackson21@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_014_1",
+          "requestor": "assistant",
+          "name": "deny_request",
+          "arguments": {
+            "order_id": "order_0072",
+            "reason": "exchange_window_expired"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_015",
+    "description": {
+      "purpose": "return request, stance=distressed, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=distressed] You mention that this situation is causing you real hardship (e.g. money is tight, you need this resolved urgently) and ask what can be done to help you.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to return order_0213 for a refund.",
+        "known_info": "Order order_0213, customer Kendall Anderson.",
+        "unknown_info": null,
+        "task_instructions": "You want to return order_0213 for a refund. Provide your email (kendall.anderson23@example.com) or your name and zip code (Kendall Anderson, 78756) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_015_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "kendall.anderson23@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_015_1",
+          "requestor": "assistant",
+          "name": "escalate",
+          "arguments": {
+            "order_id": "order_0213",
+            "reason": "high_value_partial_refund_window"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_016",
+    "description": {
+      "purpose": "return request, stance=pushy, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=pushy] You insist on getting a full refund and are impatient. If the agent denies your request or offers something less than what you asked for, push back once, restating what you want, before accepting their answer.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to return order_0035 for a refund.",
+        "known_info": "Order order_0035, customer Skyler Lopez.",
+        "unknown_info": null,
+        "task_instructions": "You want to return order_0035 for a refund. Provide your email (skyler.lopez7@example.com) or your name and zip code (Skyler Lopez, 36801) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_016_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "skyler.lopez7@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_016_1",
+          "requestor": "assistant",
+          "name": "escalate",
+          "arguments": {
+            "order_id": "order_0035",
+            "reason": "damage_reported_past_window"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_017",
+    "description": {
+      "purpose": "return request, stance=neutral, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=neutral] You ask plainly and politely about your request. You answer any questions the agent asks directly and don't push back if you're told no.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to return order_0107 for a refund.",
+        "known_info": "Order order_0107, customer Kendall Young.",
+        "unknown_info": null,
+        "task_instructions": "You want to return order_0107 for a refund. Provide your email (kendall.young32@example.com) or your name and zip code (Kendall Young, 13499) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_017_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "kendall.young32@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_017_1",
+          "requestor": "assistant",
+          "name": "refund_partial",
+          "arguments": {
+            "order_id": "order_0107",
+            "percent": 50
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_018",
+    "description": {
+      "purpose": "exchange request, stance=pushy, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=pushy] You insist on getting a full refund and are impatient. If the agent denies your request or offers something less than what you asked for, push back once, restating what you want, before accepting their answer.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to exchange an item on order_0189 for a similar one in a different size or color.",
+        "known_info": "Order order_0189, customer Casey Lee.",
+        "unknown_info": null,
+        "task_instructions": "You want to exchange an item on order_0189 for a similar one in a different size or color. Provide your email (casey.lee31@example.com) or your name and zip code (Casey Lee, 85217) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_018_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "casey.lee31@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_018_1",
+          "requestor": "assistant",
+          "name": "deny_request",
+          "arguments": {
+            "order_id": "order_0189",
+            "reason": "exchange_window_expired"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_019",
+    "description": {
+      "purpose": "exchange request, stance=distressed, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=distressed] You mention that this situation is causing you real hardship (e.g. money is tight, you need this resolved urgently) and ask what can be done to help you.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to exchange an item on order_r053 for a similar one in a different size or color.",
+        "known_info": "Order order_r053, customer Logan White.",
+        "unknown_info": null,
+        "task_instructions": "You want to exchange an item on order_r053 for a similar one in a different size or color. Provide your email (logan.white46@example.com) or your name and zip code (Logan White, 95057) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_019_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "logan.white46@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_019_1",
+          "requestor": "assistant",
+          "name": "deny_request",
+          "arguments": {
+            "order_id": "order_r053",
+            "reason": "exchange_window_expired"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_020",
+    "description": {
+      "purpose": "exchange request, stance=distressed, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=distressed] You mention that this situation is causing you real hardship (e.g. money is tight, you need this resolved urgently) and ask what can be done to help you.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to exchange an item on order_0128 for a similar one in a different size or color.",
+        "known_info": "Order order_0128, customer Riley Moore.",
+        "unknown_info": null,
+        "task_instructions": "You want to exchange an item on order_0128 for a similar one in a different size or color. Provide your email (riley.moore59@example.com) or your name and zip code (Riley Moore, 73866) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_020_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "riley.moore59@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_020_1",
+          "requestor": "assistant",
+          "name": "deny_request",
+          "arguments": {
+            "order_id": "order_0128",
+            "reason": "exchange_window_expired"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_021",
+    "description": {
+      "purpose": "exchange request, stance=distressed, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=distressed] You mention that this situation is causing you real hardship (e.g. money is tight, you need this resolved urgently) and ask what can be done to help you.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to exchange an item on order_0216 for a similar one in a different size or color.",
+        "known_info": "Order order_0216, customer Jamie Young.",
+        "unknown_info": null,
+        "task_instructions": "You want to exchange an item on order_0216 for a similar one in a different size or color. Provide your email (jamie.young17@example.com) or your name and zip code (Jamie Young, 47703) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_021_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "jamie.young17@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_021_1",
+          "requestor": "assistant",
+          "name": "deny_request",
+          "arguments": {
+            "order_id": "order_0216",
+            "reason": "exchange_window_expired"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_022",
+    "description": {
+      "purpose": "return request, stance=neutral, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=neutral] You ask plainly and politely about your request. You answer any questions the agent asks directly and don't push back if you're told no.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to return order_0005 for a refund.",
+        "known_info": "Order order_0005, customer Rowan Thomas.",
+        "unknown_info": null,
+        "task_instructions": "You want to return order_0005 for a refund. Provide your email (rowan.thomas53@example.com) or your name and zip code (Rowan Thomas, 20580) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_022_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "rowan.thomas53@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_022_1",
+          "requestor": "assistant",
+          "name": "deny_request",
+          "arguments": {
+            "order_id": "order_0005",
+            "reason": "past_return_window"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_023",
+    "description": {
+      "purpose": "exchange request, stance=pushy, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=pushy] You insist on getting a full refund and are impatient. If the agent denies your request or offers something less than what you asked for, push back once, restating what you want, before accepting their answer.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to exchange an item on order_0050 for a similar one in a different size or color.",
+        "known_info": "Order order_0050, customer Reese Clark.",
+        "unknown_info": null,
+        "task_instructions": "You want to exchange an item on order_0050 for a similar one in a different size or color. Provide your email (reese.clark19@example.com) or your name and zip code (Reese Clark, 34100) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_023_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "reese.clark19@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_023_1",
+          "requestor": "assistant",
+          "name": "deny_request",
+          "arguments": {
+            "order_id": "order_0050",
+            "reason": "exchange_window_expired"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_024",
+    "description": {
+      "purpose": "return request, stance=neutral, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=neutral] You ask plainly and politely about your request. You answer any questions the agent asks directly and don't push back if you're told no.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to return order_r046 for a refund.",
+        "known_info": "Order order_r046, customer Jamie Young.",
+        "unknown_info": null,
+        "task_instructions": "You want to return order_r046 for a refund. Provide your email (jamie.young17@example.com) or your name and zip code (Jamie Young, 47703) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_024_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "jamie.young17@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_024_1",
+          "requestor": "assistant",
+          "name": "escalate",
+          "arguments": {
+            "order_id": "order_r046",
+            "reason": "high_value_partial_refund_window"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_025",
+    "description": {
+      "purpose": "return request, stance=distressed, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=distressed] You mention that this situation is causing you real hardship (e.g. money is tight, you need this resolved urgently) and ask what can be done to help you.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to return order_0046 for a refund.",
+        "known_info": "Order order_0046, customer Alex Harris.",
+        "unknown_info": null,
+        "task_instructions": "You want to return order_0046 for a refund. Provide your email (alex.harris37@example.com) or your name and zip code (Alex Harris, 23303) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_025_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "alex.harris37@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_025_1",
+          "requestor": "assistant",
+          "name": "escalate",
+          "arguments": {
+            "order_id": "order_0046",
+            "reason": "damage_reported_past_window"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_026",
+    "description": {
+      "purpose": "exchange request, stance=distressed, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=distressed] You mention that this situation is causing you real hardship (e.g. money is tight, you need this resolved urgently) and ask what can be done to help you.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to exchange an item on order_0124 for a similar one in a different size or color.",
+        "known_info": "Order order_0124, customer Finley Wilson.",
+        "unknown_info": null,
+        "task_instructions": "You want to exchange an item on order_0124 for a similar one in a different size or color. Provide your email (finley.wilson2@example.com) or your name and zip code (Finley Wilson, 38631) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_026_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "finley.wilson2@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_026_1",
+          "requestor": "assistant",
+          "name": "deny_request",
+          "arguments": {
+            "order_id": "order_0124",
+            "reason": "exchange_window_expired"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_027",
+    "description": {
+      "purpose": "return request, stance=pushy, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=pushy] You insist on getting a full refund and are impatient. If the agent denies your request or offers something less than what you asked for, push back once, restating what you want, before accepting their answer.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to return order_r043 for a refund.",
+        "known_info": "Order order_r043, customer Harper Moore.",
+        "unknown_info": null,
+        "task_instructions": "You want to return order_r043 for a refund. Provide your email (harper.moore40@example.com) or your name and zip code (Harper Moore, 23227) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_027_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "harper.moore40@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_027_1",
+          "requestor": "assistant",
+          "name": "escalate",
+          "arguments": {
+            "order_id": "order_r043",
+            "reason": "high_value_partial_refund_window"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_028",
+    "description": {
+      "purpose": "exchange request, stance=neutral, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=neutral] You ask plainly and politely about your request. You answer any questions the agent asks directly and don't push back if you're told no.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to exchange an item on order_0138 for a similar one in a different size or color.",
+        "known_info": "Order order_0138, customer Riley Moore.",
+        "unknown_info": null,
+        "task_instructions": "You want to exchange an item on order_0138 for a similar one in a different size or color. Provide your email (riley.moore59@example.com) or your name and zip code (Riley Moore, 73866) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_028_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "riley.moore59@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_028_1",
+          "requestor": "assistant",
+          "name": "deny_request",
+          "arguments": {
+            "order_id": "order_0138",
+            "reason": "exchange_window_expired"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  },
+  {
+    "id": "refunds_d3_029",
+    "description": {
+      "purpose": "exchange request, stance=pushy, policy_version=v3",
+      "relevant_policies": null,
+      "notes": null
+    },
+    "user_scenario": {
+      "persona": "[STANCE=pushy] You insist on getting a full refund and are impatient. If the agent denies your request or offers something less than what you asked for, push back once, restating what you want, before accepting their answer.",
+      "instructions": {
+        "domain": "refunds",
+        "reason_for_call": "You want to exchange an item on order_0233 for a similar one in a different size or color.",
+        "known_info": "Order order_0233, customer Avery Lopez.",
+        "unknown_info": null,
+        "task_instructions": "You want to exchange an item on order_0233 for a similar one in a different size or color. Provide your email (avery.lopez12@example.com) or your name and zip code (Avery Lopez, 18255) if the agent asks to verify your identity, and confirm ('yes') when the agent describes the action they're about to take."
+      }
+    },
+    "ticket": null,
+    "initial_state": null,
+    "evaluation_criteria": {
+      "actions": [
+        {
+          "action_id": "refunds_d3_029_0",
+          "requestor": "assistant",
+          "name": "find_customer_by_email",
+          "arguments": {
+            "email": "avery.lopez12@example.com"
+          },
+          "info": null,
+          "compare_args": null
+        },
+        {
+          "action_id": "refunds_d3_029_1",
+          "requestor": "assistant",
+          "name": "deny_request",
+          "arguments": {
+            "order_id": "order_0233",
+            "reason": "exchange_window_expired"
+          },
+          "info": null,
+          "compare_args": null
+        }
+      ],
+      "env_assertions": null,
+      "communicate_info": null,
+      "nl_assertions": null,
+      "reward_basis": [
+        "DB",
+        "NL_ASSERTION"
+      ]
+    },
+    "issues": null,
+    "required_documents": null,
+    "user_tools": null
+  }
+]
