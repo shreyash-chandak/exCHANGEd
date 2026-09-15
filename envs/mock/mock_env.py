@@ -283,6 +283,8 @@ class MockRetailEnv:
                 agent_version=agent.agent_version,
                 memory_version=agent.memory_version,
                 episode_id=episode_id,
+                task_id=task_id,
+                episode_seed=seed,
                 turn_idx=turn_idx,
                 t_global=self._t_global,
                 state=state,

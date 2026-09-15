@@ -104,6 +104,8 @@ class ExperienceRecord(BaseModel):
     agent_version: int
     memory_version: int
     episode_id: str
+    task_id: str = ""
+    episode_seed: int = 0
     turn_idx: int
     t_global: int
     state: CanonicalState

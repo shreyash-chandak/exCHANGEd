@@ -161,6 +161,16 @@
       "title": "Episode Id",
       "type": "string"
     },
+    "task_id": {
+      "default": "",
+      "title": "Task Id",
+      "type": "string"
+    },
+    "episode_seed": {
+      "default": 0,
+      "title": "Episode Seed",
+      "type": "integer"
+    },
     "turn_idx": {
       "title": "Turn Idx",
       "type": "integer"
