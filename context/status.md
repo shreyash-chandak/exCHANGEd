@@ -33,9 +33,31 @@ parallel slots, clears the guide's >=3x target. `change/runner.py`'s bounded-
 concurrency episode runner is built and unit-tested but not yet wired into a live env
 (none exists until phase 4a). Full writeup in `docs/checkpoints/phase-4.1.md` and
 `docs/serving.md` (includes exact llama.cpp asset names/repos to retry on
-unconstrained bandwidth). **Next: phase 4a (the `refunds` tau2 domain + synthetic
-dataset) — guide mandates a STOP after 4a for the owner to review before proceeding
-further.**
+unconstrained bandwidth).
+
+**Phase 4a (the `refunds` tau2 domain) is now also complete and tagged `phase-4a-done`.**
+Built from scratch: `envs/tau2/domains/refunds/` (data model, 300-order synthetic DB,
+R1-R10 policy + D3's tightened variant, tools that deliberately don't enforce policy,
+an oracle verified against a 4752-combination exhaustive grid, 120 base + 30 D3 tasks),
+registered into `tau2.registry.registry` at import time (Q3's pattern), plus
+`envs/tau2/refunds_canonical.py` and `envs/tau2/adapter.py` (`Tau2Env`, the adapter
+session 1 never got to). Two real bugs found and fixed along the way (R8's
+refund-amount check used the wrong basis; task-generation coverage gaps in the random
+DB population) — both caught by the exhaustive grid/coverage checks themselves, not
+guessed at. **Live smoke test (5 episodes against Ollama/qwen3.5:4b) ran clean** — found
+and fixed a third real issue immediately (tau2's own built-in agent/user-simulator don't
+route through `change/llm.py::chat()`, so its thinking-disable fix didn't reach them;
+fixed by forwarding the same mechanism through `TextRunConfig`'s `llm_args_agent`/
+`llm_args_user`). The smoke run itself surfaced two genuine, worth-keeping findings (not
+bugs): 3 of 5 episodes never called a write tool, two of those still scored
+`reward=1.0` from tau2's DB-hash-match evaluator since the reference action doesn't
+mutate the DB in a way it catches; and the oracle independently caught two real policy
+violations tau2's own reward missed in both directions. Full writeup in
+`docs/checkpoints/phase-4a.md` and `docs/refunds_task_samples.md`.
+
+**STOP per the guide's own section 9** — this is a mandatory stop point. Owner reviews
+`docs/refunds_task_samples.md` and the 5-episode table in `docs/checkpoints/phase-4a.md`
+before phase 4.2 (no-memory baseline gate, LIVE, 50 episodes) proceeds.
 
 ## What this is
 
