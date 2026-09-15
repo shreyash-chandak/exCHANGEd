@@ -53,6 +53,12 @@ class Envelope:
         breach_violation = rolling_violation > self.violation_max
         breach_success = (self.baseline_success - rolling_success) > self.success_drop_max
         breach_cost = rolling_cost > self.cost_ratio_max
+        # Ignore the ramp-up period before the rolling window has enough
+        # samples to be a stable estimate (avoids spurious early exits from
+        # a single unlucky sample averaged over very few points).
+        breach_violation[:, : SIM_ROLLING_WINDOW - 1] = False
+        breach_success[:, : SIM_ROLLING_WINDOW - 1] = False
+        breach_cost[:, : SIM_ROLLING_WINDOW - 1] = False
 
         exit_times: list[int] = []
         exit_metrics: list[str] = []
