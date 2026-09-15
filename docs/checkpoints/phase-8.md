@@ -51,3 +51,27 @@ Per guide 7.6/8.3: **the PoC is complete at this point** (guide's own words). `d
 Remaining before this branch could be considered a finished PoC delivery (not "phase 8 done," but the guide's full "definition of done" checklist):
 - `make lint`/`make test` green **on `main`** — this work is all on branch `shreyash`; nothing has been merged. Merging is a decision for the owner, not something to do unilaterally.
 - The phase-4 live tau2 smoke test (5 real episodes) — blocked on the phase-1 questions plus a budget/model decision, `CHANGE_LIVE=1` gated either way.
+
+## Revision (owner-authorized, this session)
+
+Q7 (owner): re-run the smoke-test grid with one uniform simulation setting across every cell, plus seed 1, since a table mixing scales (the original memory-pressure situation described above) "can't go anywhere near the paper." Re-ran all 9 original cells (A0, A2, FULL x d1, d2, d3, seed 0) plus seed 1 (18 cells total) at the guide's own default `SIM_TRAJECTORIES=SIM_HORIZON=2000` uniformly — this machine held it fine this time (no repeat of the earlier memory pressure), ~30 minutes total, cells run sequentially one at a time as `run_grid.py` already does. `change/experiment.py::run_cell` now writes the *effective* `sim_trajectories`/`sim_horizon` into each cell's metrics, so `summary.csv` carries them as columns — confirmed uniform (2000/2000) across all 18 rows.
+
+This re-run directly surfaced the `TaskSplit` interleaving bug documented in `docs/checkpoints/phase-7.md` "Revision" (found because `A0` on `d1` vs `d2` at seed 0 came out byte-identical in the first attempt, which shouldn't happen) — fixed, and the grid was re-run a second time after the fix. The table below is from the corrected run.
+
+**Table 1** (means over seeds, n_seeds=2 throughout — matches `docs/checkpoints/phase-8.md`'s own smoke-test cell count, guide 8.4):
+
+| system | condition | n_seeds | cumulative_violations | final_success_rate | adaptations_count | rollbacks | boundary_expansions |
+|---|---|---|---|---|---|---|---|
+| A0 | d1 | 2 | 30.000 | 0.703 | 1.000 | 0.000 | 0.000 |
+| A0 | d2 | 2 | 74.000 | 0.661 | 6.000 | 0.000 | 0.000 |
+| A0 | d3 | 2 | 83.000 | 0.640 | 8.500 | 0.000 | 0.000 |
+| A2 | d1 | 2 | 29.000 | 0.703 | 11.500 | 0.000 | 0.000 |
+| A2 | d2 | 2 | 74.000 | 0.661 | 11.000 | 0.000 | 0.000 |
+| A2 | d3 | 2 | 83.000 | 0.640 | 11.000 | 0.000 | 0.000 |
+| FULL | d1 | 2 | 31.000 | 0.763 | 4.500 | 0.000 | 0.000 |
+| FULL | d2 | 2 | 107.000 | 0.703 | 1.500 | 1.000 | 0.000 |
+| FULL | d3 | 2 | 147.000 | 0.659 | 1.500 | 0.500 | 0.000 |
+
+**Reading this honestly, not selectively**: D1 (no real drift) is a near-wash across all three systems, as expected. Under D2 and D3, **FULL has *more* cumulative violations than A0**, not fewer — consistent across both seeds (d2: 44 vs 66 and 104 vs 148 per-seed; d3: 53 vs 77 and 113 vs 217 per-seed) and consistent with `test_loop.py::test_full_reduces_cumulative_violations_vs_a0_on_d2`'s own xfail finding. This is **not** the settings-mismatch artifact the original smoke test's table showed (this run is uniformly 2000x2000, confirmed via the `sim_trajectories`/`sim_horizon` columns) — it is the real, reproducible consequence of `docs/checkpoints/phase-7.md`'s "Revision" finding: `Evolve`'s canary gate, verified against a small (~40-task) held-out sample, rejects nearly every corrective candidate FULL proposes under the corrected drift severity (sometimes on `ENVELOPE_VIOLATION_MAX`, sometimes on `ENVELOPE_SUCCESS_DROP_MAX`), so `agent_version` rarely advances and FULL's own `rollbacks` count (1 and 0.5 mean, vs A0's 0) shows the safety net actively firing rather than sitting idle. A0's blunt, unverified gate has no such check and simply applies every trigger, winning on raw violation count while offering no rollback guarantee at all.
+
+**This table should not be read as "governance doesn't help" — it should be read as "this specific greedy, single-shot corrective-candidate design, verified against a canary sample this small, cannot outrun this severity of drift in one cycle."** `test_loop.py`'s properly-diagnosed root cause (phase-7.md) is the validated explanation for this table now, not a settings artifact to wave away as before. Whether this is acceptable as a documented PoC-level finding, or whether it warrants a design change (e.g. a larger canary sample, multi-cycle credit for a still-improving-but-not-yet-fully-recovered candidate, or a different Evolve policy) is the owner's call — flagging it plainly rather than tuning canary/Evolve parameters to make the table look better.
