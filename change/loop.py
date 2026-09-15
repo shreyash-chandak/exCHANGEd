@@ -71,6 +71,8 @@ class GovernanceLoop:
         seed: int,
         run_id: str,
         runs_dir: str = "runs",
+        sim_trajectories: int | None = None,
+        sim_horizon: int | None = None,
     ):
         if system not in SYSTEMS:
             raise ValueError(f"unknown system {system!r}, expected one of {SYSTEMS}")
@@ -80,6 +82,17 @@ class GovernanceLoop:
         self.seed = seed
         self.run_id = run_id
         self.feedback = drift_condition.get("feedback", "truth")
+        # Explicit overrides rather than relying on CHANGE_SIM_TRAJECTORIES
+        # at import time: change.config's constants are bound once, at
+        # first import, into every module that does `from change.config
+        # import SIM_TRAJECTORIES`. By the time a test sets the env var,
+        # change.loop (and everything upstream of it in pytest's collection
+        # order) has typically already imported and bound the default, so
+        # the env var has no effect. Constructor params sidestep that.
+        self.sim_trajectories = (
+            sim_trajectories if sim_trajectories is not None else SIM_TRAJECTORIES
+        )
+        self.sim_horizon = sim_horizon if sim_horizon is not None else SIM_HORIZON
 
         self.memory = LessonMemory()
         self.gates: dict = {}
@@ -218,7 +231,9 @@ class GovernanceLoop:
         for model_cls, twin_model in [(LastValueModel, "last_value"), (TrendModel, "trend_t1")]:
             model = model_cls().fit(self.snapshot_history)
             rng = _seeded_rng(self.seed, self.cycle_idx, twin_model)
-            sim = simulate(model, snapshot, n_traj=SIM_TRAJECTORIES, horizon=SIM_HORIZON, rng=rng)
+            sim = simulate(
+                model, snapshot, n_traj=self.sim_trajectories, horizon=self.sim_horizon, rng=rng
+            )
             prediction = make_prediction(
                 snapshot, "do_nothing", model, sim, self.envelope, twin_model
             )
@@ -389,8 +404,8 @@ class GovernanceLoop:
             sim = simulate(
                 model,
                 snapshot,
-                n_traj=SIM_TRAJECTORIES,
-                horizon=SIM_HORIZON,
+                n_traj=self.sim_trajectories,
+                horizon=self.sim_horizon,
                 rng=rng,
                 patches=patches,
             )
