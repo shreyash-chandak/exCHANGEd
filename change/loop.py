@@ -471,6 +471,13 @@ class GovernanceLoop:
     def _finish_decision(
         self, decision: AdaptationDecision, candidate: Candidate, result: dict
     ) -> None:
+        # Candidate isn't in guide 7.5's literal "every cycle persists" list,
+        # but without it a run dir can't recover which candidate *kind* a
+        # decision applied (candidates are otherwise ephemeral, only
+        # referenced by id from Prediction/SandboxResult) -- needed for
+        # phase 8's metrics (adaptations_count, attribution, etc). See
+        # docs/checkpoints/phase-8.md.
+        self.store.append(candidate)
         self.store.append(decision)
         self.decision_history.append(decision)
         result["decision"] = decision.decision
