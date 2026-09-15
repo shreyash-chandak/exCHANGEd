@@ -89,6 +89,13 @@ def run_cell(
         loop.run(n_episodes)
 
         metrics = compute_metrics(run_dir)
+        # Owner-authorized addition (Q7, docs/checkpoints/phase-8.md
+        # "Revision" section): record the *effective* (post-None-fallback)
+        # simulation scale actually used for this cell, so summary.csv can
+        # be audited for a uniform sim_trajectories/sim_horizon setting
+        # across every cell of a grid run.
+        metrics["sim_trajectories"] = loop.sim_trajectories
+        metrics["sim_horizon"] = loop.sim_horizon
 
         run_dir.mkdir(parents=True, exist_ok=True)
         metrics_path.write_text(json.dumps(metrics, default=str, indent=2))

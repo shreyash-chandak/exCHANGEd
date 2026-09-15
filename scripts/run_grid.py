@@ -19,6 +19,12 @@ def main(
     n_episodes: int = typer.Option(1000, "--n-episodes"),
     out: str = typer.Option(..., help="output directory, e.g. runs/grid-mock"),
     n_tasks: int = typer.Option(400),
+    sim_trajectories: int = typer.Option(
+        None, "--sim-trajectories", help="overrides SIM_TRAJECTORIES uniformly for every cell"
+    ),
+    sim_horizon: int = typer.Option(
+        None, "--sim-horizon", help="overrides SIM_HORIZON uniformly for every cell"
+    ),
 ) -> None:
     if env != "mock":
         raise typer.BadParameter("only --env mock is implemented")
@@ -34,6 +40,8 @@ def main(
         n_episodes=n_episodes,
         out_dir=out,
         n_tasks=n_tasks,
+        sim_trajectories=sim_trajectories,
+        sim_horizon=sim_horizon,
     )
 
     typer.echo(f"{len(rows)} cells written to {out}/summary.csv")
