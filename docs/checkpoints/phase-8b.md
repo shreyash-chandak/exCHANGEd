@@ -98,17 +98,75 @@ Evolve adds an additional, mostly-redundant safety layer on top of an already-he
 filtered candidate stream. Both draw on the same small (~40-task) held-out sample
 noise problem documented in `phase-7.md`.
 
-## Not fixed further
+## Not fixed further (at the time of tagging `phase-4.0-done`)
 
 Per this session's established pattern (and the owner's own prior instruction to
 document rather than keep tuning), none of A1's non-triggering, A2's over-triggering,
 or Negotiate/Evolve's near-total suppression under D2/D3 were adjusted to make this
-table look better. `ENVELOPE_VIOLATION_MAX`, `DRIFT_ALERT_JSD`, `LEAD_TIME_TRIGGER`,
-and `supervisor_oracle`'s comparison are all guide-specified and left as-is. Whether
-any of these thresholds should be revisited given the corrected (stronger) drift
-population is an open question for the owner, not a unilateral fix.
+table look better at the time this checkpoint's grid was tagged. `ENVELOPE_VIOLATION_MAX`,
+`DRIFT_ALERT_JSD`, `LEAD_TIME_TRIGGER`, and `supervisor_oracle`'s comparison were all
+guide-specified and left as-is pending owner input. See "Verification-gate
+recalibration" below for what changed after the owner reviewed this table.
 
 ## Tag
 
 `phase-4.0-done` tagged after this checkpoint, per session-2 guide section 1's
 instruction ("Tag `phase-4.0-done`. Checkpoint must include...").
+
+## Verification-gate recalibration (owner-authorized, same session)
+
+After reviewing this table the owner asked to dig into whether Negotiate/Evolve's
+suppression of A3-FULL's adaptation rate was itself a fixable calibration bug before
+moving on to phase 4.1. Two real, distinct measurement bugs were found and fixed:
+
+1. **`negotiate.supervisor_oracle` and `evolve.check_and_rollback` compared small-
+   sample point estimates as if exact.** `sandbox.violation_rate < live_violation`
+   (guide 7.3's literal formula) and the canary check against
+   `ENVELOPE_VIOLATION_MAX`/`ENVELOPE_SUCCESS_DROP_MAX` both treat a single noisy
+   measurement (sandbox: ~`SANDBOX_TASKS_PER_CANDIDATE` tasks; canary: similar) as
+   ground truth. Fixed with `negotiate.one_sided_margin` -- a one-sigma
+   normal-approximation tolerance band added to both sides of each comparison,
+   computed from the known sample sizes, not an arbitrary threshold loosening.
+   `ENVELOPE_VIOLATION_MAX`, `ENVELOPE_SUCCESS_DROP_MAX`, and `SUPERVISOR_SUCCESS_TOL`
+   themselves are untouched.
+2. **`counterfactual.patch_from_sandbox` only patched the exact states the sandbox
+   sample happened to visit.** Traced directly: in one cycle, the live snapshot had
+   13 drift-relevant ("eligible") states but the ~25-task sandbox sample covered only
+   4 of them -- the other 9 kept the forecast model's un-patched, still-drifting
+   prediction, even though a lesson-based candidate's real live mechanism
+   (`LessonMemory.retrieve`'s partial-match tier) generalizes across every state
+   sharing `(task_type, within_policy_window)`. Fixed by generalizing the sandbox's
+   observed distribution to every snapshot state sharing the category the candidate's
+   own live mechanism would actually reach (`add_lesson`/`remove_lessons` by
+   `(task_type, within_policy_window)`; `approval_gate` by `(value_bucket,
+   within_policy_window)`) -- mirroring the real generalization rule, not an
+   arbitrary broadening.
+
+**Both fixes are real, individually verified** (traced specific cycles where a
+decision or margin measurably changed -- e.g. one candidate that previously rolled
+back now sticks at `agent_version=2` for the rest of the run; margins shifted from
+-0.08 to -0.05 and from 0.00 to +0.01 in traced cycles), and neither touches a
+guide-protected constant.
+
+**But their aggregate effect on `test_full_reduces_cumulative_violations_vs_a0_on_d2`
+is second-order**: cumulative violations at the test's settings are unchanged, 66
+(FULL) vs 44 (A0), before and after both fixes. Digging into why: even with full
+category-generalized patching, `envelope_margin_q50` for the D2 corrective candidate
+remains meaningfully negative in most cycles (e.g. -0.05, -0.02) -- meaning the
+forecast is *correctly* predicting that a single G1 corrective lesson
+(`_CORRECTIVE_LESSON_GENEROSITY=-0.4`, diluted against accumulated +1.0-generosity
+lessons via `MEMORY_TOP_K` averaging) genuinely is not strong enough to pull the
+trajectory back under `ENVELOPE_VIOLATION_MAX` within one forecast horizon, given how
+strong D2's drift was deliberately engineered to be (`docs/checkpoints/phase-3.md`).
+
+**Reframed conclusion**: two genuine measurement-noise bugs existed and are now
+fixed, but the dominant remaining cause of A3-FULL's under-performance is not
+measurement noise -- it's that a single-cycle candidate of this design genuinely
+can't outrun this drift severity, and Negotiate/Evolve are correctly declining to
+claim an insufficient fix as successful. A0 only wins because it faces no such
+verification bar at all, not because its fix is actually better. Going further
+(giving multi-cycle credit for a candidate that's improving but not yet fully
+recovered, or strengthening G1's corrective magnitude) would be a real design change,
+not a bug fix -- left for the owner to decide; not made unilaterally. The owner's
+decision after this investigation was to proceed to phase 4.1 rather than pursue this
+further for now.

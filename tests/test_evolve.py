@@ -68,6 +68,7 @@ def test_rollback_restores_exact_lesson_ids_and_gates():
         current_gates=current_gates,
         parent_memory=parent_memory,
         parent_gates=parent_gates,
+        canary_n=40,
     )
 
     assert failed is True
@@ -105,6 +106,7 @@ def test_no_rollback_when_canary_passes():
         current_gates={},
         parent_memory=parent_memory,
         parent_gates={},
+        canary_n=40,
     )
 
     assert failed is False

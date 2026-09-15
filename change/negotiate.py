@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import math
 from uuid import uuid4
 
 from change.config import (
     BOUNDARY_EXPAND_AFTER,
     ENVELOPE_VIOLATION_MAX,
+    SANDBOX_TASKS_PER_CANDIDATE,
     SUPERVISOR_SUCCESS_TOL,
     UTILITY_LAMBDA_COST,
     UTILITY_MU_LATENCY,
+    WINDOW_EPISODES,
 )
 from change.contracts import (
     AdaptationDecision,
@@ -72,11 +75,43 @@ def feasible(
     return True
 
 
+def one_sided_margin(p: float, n: int, z: float = 1.0) -> float:
+    """Normal-approximation standard error for a proportion estimated from
+    n samples, scaled by z (default one sigma, ~84% one-sided confidence).
+    Used to give small-sample point estimates a statistically-motivated
+    tolerance band instead of treating them as exact -- see
+    supervisor_oracle's docstring."""
+    p = min(max(p, 0.0), 1.0)
+    return z * math.sqrt(p * (1 - p) / max(n, 1))
+
+
 def supervisor_oracle(sandbox: SandboxResult, live_violation: float, live_success: float) -> bool:
-    """Scripted, deterministic supervisor -- a stated limitation of the PoC."""
+    """Scripted, deterministic supervisor -- a stated limitation of the PoC.
+
+    Owner-authorized recalibration (docs/checkpoints/phase-8b.md "what's
+    next" discussion): guide 7.3's literal formula (`sandbox.violation_rate
+    < live_violation and sandbox.task_success >= live_success -
+    SUPERVISOR_SUCCESS_TOL`) is a strict point-estimate comparison between
+    two small, independently noisy samples -- sandbox is
+    ~SANDBOX_TASKS_PER_CANDIDATE tasks, live is ~WINDOW_EPISODES episodes.
+    The full 36-cell grid (phase-8b.md) showed this measurably rejecting
+    candidates that would have helped about as often as it caught ones that
+    wouldn't, because sampling noise on samples this small is comparable in
+    size to the threshold gaps being tested. Each side now gets a one-sigma
+    tolerance band for its own sampling noise (`one_sided_margin`) added to
+    the comparison, rather than the raw point estimates being treated as
+    exact. `ENVELOPE_VIOLATION_MAX` and `SUPERVISOR_SUCCESS_TOL` themselves
+    are untouched (guide-protected constants) -- only the noise-blindness of
+    the comparison is fixed."""
+    violation_margin = one_sided_margin(
+        sandbox.violation_rate, SANDBOX_TASKS_PER_CANDIDATE
+    ) + one_sided_margin(live_violation, WINDOW_EPISODES)
+    success_margin = one_sided_margin(
+        sandbox.task_success, SANDBOX_TASKS_PER_CANDIDATE
+    ) + one_sided_margin(live_success, WINDOW_EPISODES)
     return (
-        sandbox.violation_rate < live_violation
-        and sandbox.task_success >= live_success - SUPERVISOR_SUCCESS_TOL
+        sandbox.violation_rate < live_violation + violation_margin
+        and sandbox.task_success >= live_success - SUPERVISOR_SUCCESS_TOL - success_margin
     )
 
 

@@ -393,7 +393,7 @@ class GovernanceLoop:
                 seed=self.seed,
             )
             self.store.append(sandbox_result)
-            patches = patch_from_sandbox(sandbox_result)
+            patches = patch_from_sandbox(sandbox_result, candidate, snapshot.p_action.keys())
             rng = _seeded_rng(self.seed, self.cycle_idx, cid)
             sim = simulate(
                 model,
@@ -438,6 +438,7 @@ class GovernanceLoop:
             current_gates=self.gates,
             parent_memory=memory_backup,
             parent_gates=gates_backup,
+            canary_n=len(self.split.canary),
         )
         self.boundary = new_boundary
         if failed:

@@ -9,7 +9,7 @@ since that would bias the A0-vs-FULL comparison in FULL's favor.
 this rate; this test just bounds it loosely as a sanity check.
 
 `test_full_reduces_cumulative_violations_vs_a0_on_d2` is xfail: after fixing
-three real bugs the population revision exposed --
+five real bugs the population revision exposed --
 1) TaskSplit's plain shuffle under-sampling 40/40 canary/sandbox tasks
    biased composition vs. the 320-task train split -- fixed by stratifying
    on (task_type, within_policy_window);
@@ -19,22 +19,37 @@ three real bugs the population revision exposed --
    through these lists by index -- fixed with a final shuffle per list after
    stratified sampling;
 3) `_seeded_rng`'s use of Python's per-process-randomized `hash()` on
-   candidate ids -- fixed with zlib.crc32
--- cumulative violations land close (44 vs 66 at the settings below, seed 0)
-rather than FULL beating A0. The remaining gap is a genuine dynamic, not a
-bug: Evolve's canary gate (`change/evolve.py::check_and_rollback`) rejects
-essentially every FULL candidate under the corrected, much stronger D2
-drift -- sometimes on ENVELOPE_VIOLATION_MAX (a single noisy ~40-task canary
-pass exceeds it even when the live window doesn't), sometimes on
-ENVELOPE_SUCCESS_DROP_MAX (post-drift achievable success falls short of the
-baseline frozen at the run's first 3 pre-drift windows) -- so every
-corrective candidate gets rolled back and memory never compounds a fix. A0
-has no such check (`_run_simple_system` applies unconditionally), so this is
-not an apples-to-apples candidate-quality comparison: FULL is held to a
-stricter, safety-verified recovery bar that this drift severity makes
-unreachable in one cycle, and a single small canary sample can't reliably
-confirm either criterion. Owner-authorized as a documented finding rather
-than a further code change. See docs/checkpoints/phase-7.md.
+   candidate ids -- fixed with zlib.crc32;
+4) `negotiate.supervisor_oracle`/`evolve.check_and_rollback` compared small
+   (~SANDBOX_TASKS_PER_CANDIDATE/canary-sized) sample point estimates as if
+   exact -- fixed with a one-sigma statistical tolerance band
+   (`negotiate.one_sided_margin`) on both sides of each comparison;
+5) `counterfactual.patch_from_sandbox` only patched the exact states the
+   small sandbox sample happened to visit (measured: as few as 4 of 13
+   drift-relevant states in one traced cycle), so the forecast kept
+   predicting un-patched, still-drifting behavior for the rest even though
+   a candidate's live mechanism (e.g. LessonMemory.retrieve's partial-match
+   tier) generalizes across the whole matching category -- fixed by
+   generalizing the patch to every state sharing that category.
+-- cumulative violations land close (44 vs 66 at the settings below, seed 0,
+unchanged by fixes 4-5) rather than FULL beating A0. Fixes 4-5 are real,
+verified (individual decisions and margins measurably changed) and
+necessary, but turned out to be second-order here: even with both applied,
+`envelope_margin_q50` for the D2 corrective candidate is still meaningfully
+negative in most cycles (e.g. -0.05, -0.02), meaning the forecast is right
+that one G1 corrective lesson (`_CORRECTIVE_LESSON_GENEROSITY=-0.4`,
+competing against accumulated +1.0-generosity lessons via MEMORY_TOP_K
+averaging) genuinely isn't strong enough to pull the trajectory back under
+ENVELOPE_VIOLATION_MAX within the forecast horizon, given how strong this
+drift was deliberately engineered to be (docs/checkpoints/phase-3.md). So
+Negotiate/Evolve's caution here is *not* miscalibration -- it's the
+system correctly declining to claim a fix that measurement confirms isn't
+sufficient, and A0's blunt gate wins only because it faces no such bar. A0
+has no such check (`_run_simple_system` applies unconditionally), so this
+is still not an apples-to-apples candidate-quality comparison. Whether to
+go further (multi-cycle credit for partial improvement, or a stronger
+corrective candidate) is the owner's call, not made unilaterally. See
+docs/checkpoints/phase-8b.md.
 """
 
 import pytest
@@ -58,13 +73,16 @@ def _agent_factory(memory, gates, rng):
 
 @pytest.mark.xfail(
     reason=(
-        "Evolve's canary gate rejects every FULL candidate under the "
-        "corrected D2 drift (frozen pre-drift baseline_success vs. "
-        "post-drift achievable canary success differ by >"
-        "ENVELOPE_SUCCESS_DROP_MAX even when violation_rate is back inside "
-        "ENVELOPE_VIOLATION_MAX), so cumulative violations tie A0 (31 vs 31) "
-        "instead of FULL winning. Genuine dynamic under the now-correct "
-        "drift severity, not a bug -- see docs/checkpoints/phase-7.md."
+        "FULL still has more cumulative violations than A0 (66 vs 44) even "
+        "after fixing two real small-sample measurement bugs in "
+        "supervisor_oracle/Evolve's canary check and counterfactual patch "
+        "coverage (see module docstring). Both fixes are real and verified "
+        "but second-order: envelope_margin_q50 for the D2 corrective "
+        "candidate is still meaningfully negative in most cycles, meaning a "
+        "single G1 corrective lesson genuinely isn't strong enough against "
+        "this drift severity in one cycle -- not miscalibration, the system "
+        "correctly declining an insufficient fix. A0 faces no such bar and "
+        "wins by default. See docs/checkpoints/phase-8b.md."
     ),
     strict=True,
 )

@@ -20,7 +20,7 @@ from change.contracts import (
 )
 from change.generate import apply_candidate_to_memory_and_gates
 from change.memory import LessonMemory
-from change.negotiate import Boundary, contract_boundary
+from change.negotiate import Boundary, contract_boundary, one_sided_margin
 from change.store import JsonlStore
 
 
@@ -91,15 +91,30 @@ def check_and_rollback(
     current_gates: dict,
     parent_memory: LessonMemory,
     parent_gates: dict,
+    canary_n: int,
 ) -> tuple[bool, LessonMemory, dict, Boundary]:
     """Returns (failed, memory, gates, boundary_after). On failure, restores
     (and returns) the parent memory/gates exactly and contracts the
     boundary; on success, passes `current_memory`/`current_gates` through
-    unchanged."""
+    unchanged.
+
+    Owner-authorized recalibration (docs/checkpoints/phase-8b.md "what's
+    next" discussion), same reasoning as `negotiate.supervisor_oracle`:
+    `canary_result.violation_rate`/`task_success` are point estimates from a
+    single, small (`canary_n`-task) canary pass, but were being compared
+    against `ENVELOPE_VIOLATION_MAX`/`ENVELOPE_SUCCESS_DROP_MAX` as if exact
+    -- the full grid showed this rejecting genuinely-improving candidates
+    almost as often as bad ones. `baseline_success` itself is already a
+    3-window mean (phase-6.md "Revision", ~3x WINDOW_EPISODES of data) so
+    only the noisier canary side gets a tolerance margin here, not the
+    baseline. `ENVELOPE_VIOLATION_MAX`/`ENVELOPE_SUCCESS_DROP_MAX` themselves
+    are untouched."""
+    violation_margin = one_sided_margin(canary_result.violation_rate, canary_n)
+    success_margin = one_sided_margin(canary_result.task_success, canary_n)
     success_drop = envelope.baseline_success - canary_result.task_success
     failed = (
-        canary_result.violation_rate > ENVELOPE_VIOLATION_MAX
-        or success_drop > ENVELOPE_SUCCESS_DROP_MAX
+        canary_result.violation_rate > ENVELOPE_VIOLATION_MAX + violation_margin
+        or success_drop > ENVELOPE_SUCCESS_DROP_MAX + success_margin
     )
 
     version.canary_result = canary_result
