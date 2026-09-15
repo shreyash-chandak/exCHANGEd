@@ -8,3 +8,5 @@
 2026-09-15 b7f7c96 phase 7 step 7.3 (negotiate boundary controller) - no blockers
 2026-09-15 02f41f1 phase 7 step 7.5 fix (loop sim_trajectories/sim_horizon overrides) - no blockers; perf fix to TrendModel followed (1345d31)
 2026-09-15 07dd4ce phase 7 checkpoint + status update - phase-7-done tagged; STOP reached (live tau2 D2 sanity gate is owner's call); phase 8 unblocked, proceeding
+2026-09-15 e08354f phase 8 step 8.2 (experiment.py grid runner with resume) - no blockers
+2026-09-15 e0ac778 phase 8 checkpoint - phase-8-done tagged; PoC complete per guide's definition of done. Smoke test hit real system memory pressure on this machine (unrelated to the code); resumable design + reduced sim settings recovered all 9 cells. No blockers remain except owner decisions (see final session summary / context/status.md) and merging shreyash to main.
