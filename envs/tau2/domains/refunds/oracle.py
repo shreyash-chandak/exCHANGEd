@@ -72,22 +72,19 @@ def _is_gift_card(order: Order, customer: Customer) -> bool:
     return False
 
 
-def _refund_amount(order: Order, request_type: RequestType) -> float:
-    return order.total if request_type == "return" else order.total * 0.5
-
-
 def _apply_r7_r8(
-    order: Order, customer: Customer, request_type: RequestType, base_action: TakenAction
+    order: Order, customer: Customer, refund_amount: float, base_action: TakenAction
 ) -> TakenAction:
     """R7 (gift-card refunds not permitted) then R8 (frequent refunders
     escalate over-100 refunds), applied on top of an otherwise-compliant
-    refund_full/refund_partial decision."""
+    refund_full/refund_partial decision. `refund_amount` is the actual
+    dollar amount this specific action would refund -- the full total for
+    refund_full, half of it for refund_partial's 50% -- not inferred from
+    the request type, since a "return" request can resolve to either
+    depending on which window it falls in (R2 vs R3)."""
     if _is_gift_card(order, customer):
         return ("deny_request", {"order_id": order.order_id, "reason": "gift_card_refund_not_permitted"})
-    if (
-        order.prior_refunds_12m >= _R8_MIN_PRIOR_REFUNDS
-        and _refund_amount(order, request_type) > _R8_REFUND_THRESHOLD
-    ):
+    if order.prior_refunds_12m >= _R8_MIN_PRIOR_REFUNDS and refund_amount > _R8_REFUND_THRESHOLD:
         return ("escalate", {"order_id": order.order_id, "reason": "frequent_refunder_over_threshold"})
     return base_action
 
@@ -131,13 +128,16 @@ def _expected_return_or_exchange(
     # request.request_type == "return"
     if days <= r2_days:
         return _apply_r7_r8(
-            order, customer, "return", ("refund_full", {"order_id": order.order_id})
+            order, customer, order.total, ("refund_full", {"order_id": order.order_id})
         )
     if days <= r3_days:
         if order.total >= r3_threshold:
             return ("escalate", {"order_id": order.order_id, "reason": "high_value_partial_refund_window"})
         return _apply_r7_r8(
-            order, customer, "return", ("refund_partial", {"order_id": order.order_id, "percent": 50})
+            order,
+            customer,
+            order.total * 0.5,
+            ("refund_partial", {"order_id": order.order_id, "percent": 50}),
         )
     # days > r3_days: too late for any return (R4)
     if order.damage_reported:
