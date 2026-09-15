@@ -39,8 +39,23 @@ def chat(
         model=LLM_MODEL,
         messages=messages,
         api_base=LLM_BASE_URL,
+        # Local servers (llama-server, Ollama) don't check this, but
+        # litellm's openai/ provider path requires a non-empty key to be
+        # present at all. Ignored by the ollama_chat/ provider.
+        api_key="local-no-auth-required",
         temperature=temperature,
         max_tokens=max_tokens,
+        # Two different mechanisms for the same thing, passed together and
+        # each harmless to the other's provider: chat_template_kwargs'
+        # enable_thinking is what llama-server's --jinja templating (and
+        # vLLM) honor; a bare `think` kwarg is what litellm's ollama_chat/
+        # provider maps onto Ollama's native /api/chat `think` field.
+        # Measured directly (docs/serving.md): chat_template_kwargs alone
+        # did NOT disable thinking through Ollama's OpenAI-compatible
+        # endpoint (content came back empty, reasoning in a separate
+        # `reasoning_content` field) -- only `think=False` via
+        # ollama_chat/ actually worked for Ollama.
+        think=False,
         extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
     if tools is not None:
@@ -52,10 +67,13 @@ def chat(
     result = response.model_dump()
 
     for choice in result.get("choices", []):
-        content = (choice.get("message") or {}).get("content") or ""
-        if "<think>" in content:
+        message = choice.get("message") or {}
+        content = message.get("content") or ""
+        reasoning = message.get("reasoning_content") or message.get("reasoning") or ""
+        if "<think>" in content or reasoning:
             raise ThinkingLeakError(
-                f"response contains a <think> block despite enable_thinking=False: {content!r}"
+                "response contains reasoning/a <think> block despite thinking "
+                f"disabled: content={content!r} reasoning={reasoning!r}"
             )
 
     return result
