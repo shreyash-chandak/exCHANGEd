@@ -19,6 +19,24 @@ which Negotiate/Evolve correctly decline to accept rather than a bug. Full write
 seeing this was to proceed to phase 4.1 rather than pursue further (multi-cycle
 credit / stronger candidates) for now.
 
+**Phase 4.1 (local model serving) is now also complete and tagged `phase-4.1-done`.**
+llama.cpp (the guide's stated primary serving path) was attempted per the owner's
+explicit instruction, then abandoned after measuring ~8-10 KB/s sustained download
+throughput in this environment (not a code issue, confirmed across multiple tools and
+attempts) — the ~3.3GB of binaries+model would have taken many hours. Fell back to
+Ollama per the owner's own contingency instruction; it was already installed with
+`qwen3.5:4b` already pulled, no download needed. `change/llm.py::chat()` works
+end-to-end with thinking genuinely disabled (required `think=False` via litellm's
+`ollama_chat/` provider — the guide-suggested `chat_template_kwargs` mechanism alone
+did not work for Ollama, measured directly). Benchmark: 3.61x aggregate speedup at 6
+parallel slots, clears the guide's >=3x target. `change/runner.py`'s bounded-
+concurrency episode runner is built and unit-tested but not yet wired into a live env
+(none exists until phase 4a). Full writeup in `docs/checkpoints/phase-4.1.md` and
+`docs/serving.md` (includes exact llama.cpp asset names/repos to retry on
+unconstrained bandwidth). **Next: phase 4a (the `refunds` tau2 domain + synthetic
+dataset) — guide mandates a STOP after 4a for the owner to review before proceeding
+further.**
+
 ## What this is
 
 Implementation of the CHANGE governance-loop PoC per `context/CHANGE_poc_agent_guide.md`
