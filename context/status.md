@@ -1,7 +1,35 @@
 # CHANGE PoC — status
 
-Last updated: 2026-09-15 (session 2, Claude Sonnet 5). Session-1 PoC was complete per
-the original guide's definition of done. This session first implemented the owner's
+Last updated: 2026-09-16 (session 2 continued, Claude Sonnet 5). **Phase 4b (retail
+adapter) is complete and tagged `phase-4b-done`.** Phase 4.2 (no-memory baseline gate)
+ran for both domains but **both gates fail** — see `docs/checkpoints/phase-4.2.md`.
+This is the guide's own explicit STOP point 3 ("owner confirms the gate"), currently
+**awaiting owner input** before phase 4c (live D2 gate) proceeds. Summary:
+
+- **Three real bugs found and fixed** getting a trustworthy retail result: the
+  `retail_d3` domain variant was never actually registered (nothing imported the
+  module); `_canonicalize_retail` graded write actions against the wrong order
+  (picked the first reference action bearing an order_id, which is always a read
+  tool, not the write action); tau2's default `evaluation_type` would have hit an
+  unconfigured OpenAI call for NL_ASSERTIONS on some retail tasks (pinned to
+  `ALL_IGNORE_BASIS`). All three caught live, not guessed at.
+- **Baseline gate fails for both domains, for two different diagnosed reasons** (read
+  from actual transcripts, not assumed): retail's 92% derail rate clusters at ~11
+  turns, consistent with `max_steps=20` budget exhaustion on inherently multi-lookup
+  tasks (identity auth + order lookup + product-variant checks). Refunds' 60% derail
+  is the model resolving denials in plain natural language instead of calling the
+  `deny_request` tool that exists specifically to make denial a gradable action —
+  not a budget problem. Neither matches the guide's own 4.2.2/4.2.3 remediation menu
+  (written assuming a user-simulator-side fix, which isn't the cause for either).
+- Phase 4c's `LessonAgent` (memory injection, gate-forcing) and `LiveLessonExtractor`
+  are built, tested (offline + a live 2-episode smoke run), and wired into
+  `scripts/run_episodes.py --env tau2` as the new default path (with `--resume`
+  support, verified live via an actual kill-and-resume test). Not yet run at the
+  guide's full 300-episode D2 gate scale — waiting on the baseline-gate STOP above.
+
+## History (session 2, through phase 4.1)
+
+Session-1 PoC was complete per the original guide's definition of done. This session first implemented the owner's
 answers to session 1's open questions (Q3, Q5 + sub-decisions, Q6, Q7), then the owner
 supplied `context/CHANGE_poc_agent_guide-2.md` (session-2 guide, wins on conflicts with
 session 1) which restated those decisions with an exact spec and added phase 4.0-4d.
@@ -69,12 +97,16 @@ research plan both implement). Repo root doubles as `change-poc`. Branch `shreya
 
 ## Where things stand
 
-**Session-1 phases 0, 1, 2, 3, 5, 6, 7, 8 done and tagged. Session-2 phase 4.0 done and
-tagged `phase-4.0-done`.** Next up per the session-2 guide's own ordering: phase 4.1
-(local model serving), not started.
+**Session-1 phases 0, 1, 2, 3, 5, 6, 7, 8 done and tagged. Session-2 phases 4.0, 4.1,
+4a, 4b done and tagged.** Phase 4.2's baseline gate ran for both domains but both
+gates fail (see the summary at the top and `docs/checkpoints/phase-4.2.md`) — **STOP,
+awaiting owner input** before phase 4c's 300-episode D2 gate runs at full scale.
+Phase 4c's code (LessonAgent, LiveLessonExtractor, the live memory loop, `--resume`)
+is built and verified live at small scale, just not run at the guide's full scale yet.
 
-`make test` (`uv run pytest -q -m "not live"`) is green: **1421 passed, 4 xfailed**,
-~30-40s for the whole suite in one invocation.
+`make test` (`uv run pytest -q -m "not live"`) is green: **6220 passed, 4 xfailed**,
+~30-60s for the whole suite in one invocation (2 live tests deselected: refunds and
+retail 2-episode smoke).
 
 - **Session-1 phases 0–2**: unchanged — see `docs/checkpoints/phase-{0,1,2}.md`.
 - **Phase 3** (mock environment): population revised. `docs/checkpoints/phase-3.md`.
@@ -92,6 +124,16 @@ tagged `phase-4.0-done`.** Next up per the session-2 guide's own ordering: phase
   against the session-2 guide's exact spec (test naming, shared envelope-baseline
   helper, `--serial` flag), verified the T1-vs-LastValue STOP gate clears, ran the full
   36-cell grid. `docs/checkpoints/phase-4.0.md`, `phase-8b.md`.
+- **Phase 4.1** (local model serving): Ollama fallback (llama.cpp abandoned on this
+  environment's ~8-10 KB/s download throughput), `change/llm.py::chat()`, 3.61x
+  concurrency speedup. `docs/checkpoints/phase-4.1.md`, `docs/serving.md`.
+- **Phase 4a** (`refunds` tau2 domain): built from scratch, live smoke clean.
+  `docs/checkpoints/phase-4a.md`, `docs/refunds_task_samples.md`.
+- **Phase 4b** (retail adapter): collapsed canonicalization, RT1-RT3 native compliance
+  rules, D3 grading switch. Three real bugs found and fixed (see summary at top).
+  `docs/checkpoints/phase-4b.md`.
+- **Phase 4.2** (no-memory baseline gate, both domains): both gates fail, two
+  different diagnosed causes. `docs/checkpoints/phase-4.2.md`. **Current STOP.**
 
 ## Key findings this session (all reported, none silently tuned away)
 
@@ -204,8 +246,20 @@ paper-ready:**
 
 ## Next step
 
-Per the session-2 guide's own ordering: phase 4.1 (local model serving — Qwen3.5 4B,
-llama.cpp primary / Ollama fallback, litellm entrypoint, concurrency). Owner input
-would help first on the open questions above, especially #5/#6 (whether to adjust any
-guide-specified thresholds before more grid time is spent) and #8 (green light to
-start 4.1).
+**Currently stopped at phase 4.2's baseline-gate STOP** (`docs/checkpoints/
+phase-4.2.md`) — both domains' no-memory baseline gate fail, for two different
+diagnosed reasons (retail: `max_steps=20` budget exhaustion on multi-lookup tasks;
+refunds: the model resolves denials in text instead of calling `deny_request`).
+Three questions need an answer before phase 4c's 300-episode D2 gate runs at full
+scale (see `phase-4.2.md`'s "Open questions for owner" for the full context):
+
+1. Raise `max_steps` for retail and re-run the baseline?
+2. Run the guide's 4.2.2 remediation steps for refunds' violation rate despite
+   derail being the bigger problem there, or accept the text-only-denial pattern
+   as a documented limitation?
+3. Proceed to phase 4c anyway (to see if the D2 drift signal is measurable
+   regardless), or resolve this stop first?
+
+The older phases-1-through-4.1 open questions below (Q1/Q2/Q4, window definition,
+Negotiate/Evolve design, A1/A2 trigger miscalibration) are all still open too, but
+are lower priority than the above right now.
