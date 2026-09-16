@@ -1,12 +1,11 @@
 # CHANGE PoC — status
 
-Last updated: 2026-09-16 (session 2 continued, Claude Sonnet 5). **Phases 4b, 4.2, and
-4d's code are all complete.** Phase 4c's D2 gate is running but not finished (300
-episodes requested, 56 completed and safely checkpointed via `--resume` before a
-system-memory-pressure kill). **All remaining live work is deliberately batched for a
-single future session** (owner's explicit call, 2026-09-16: can't dedicate long
-stretches of laptop time right now, wants everything built and ready to run in one go
-later) rather than run incrementally. Summary of what's done:
+Last updated: 2026-09-16 (session 2 continued, Claude Sonnet 5). **Phases 4b, 4.2, 4c,
+and 4d's code are all complete, and phase 4c's D2 gate (all 300 episodes) has finished
+running.** Owner decided to resume live work same-session rather than fully batch it as
+originally planned. What's left is: the owner's read on phase 4c's findings, the
+deferred live governance-loop smoke test, and the eventual live grid itself (sized but
+not run). Summary of what's done:
 
 - **Phase 4b (retail adapter)**: tagged `phase-4b-done`. Three real bugs found and
   fixed getting a trustworthy result: `retail_d3` domain never actually registered
@@ -25,12 +24,22 @@ later) rather than run incrementally. Summary of what's done:
   orthogonal, diagnosed behavioral reasons** (retail: budget-limited task complexity;
   refunds: text-only denial instead of tool use), not grading bugs. Full detail
   `docs/checkpoints/phase-4.2.md`.
-- **Phase 4c (D2 gate)**: `LessonAgent` (memory injection, gate-forcing) and
-  `LiveLessonExtractor` built, tested (offline + live smoke), wired into
-  `scripts/run_episodes.py --env tau2` with working `--resume` (verified via a real
-  kill-and-resume test). The actual 300-episode D2 gate run is **in progress, paused**
-  at 56/300 episodes (safely resumable, no data loss) — deferred to the batched final
-  session per owner request.
+- **Phase 4c (D2 gate)**: **complete, gate fails, root cause diagnosed**.
+  `LessonAgent`/`LiveLessonExtractor` built, tested, wired into
+  `scripts/run_episodes.py --env tau2 --resume`. Found and fixed a real bug in
+  `--resume` mid-run (`_resume_state` didn't reconstruct `violation_flags`, crashing
+  the periodic block report with `ZeroDivisionError` once the global episode index
+  crossed a multiple of 50 -- the episode itself was safely recorded, only the report
+  crashed; fixed, 4 regression tests). All 300 episodes completed. **Guide 4c.3's gate
+  fails**: last-100-minus-first-100 violation delta is 0.050, below the 0.08 threshold
+  (per guide instruction, not tuned around, reported as-is). **Root cause**: the top 5
+  most-retrieved lessons (up to 387x) all teach *caution*, not generosity — unlike the
+  mock env's `MockLessonExtractor` (a synthetic mechanism hardcoded to be
+  generosity-biased under D2), `LiveLessonExtractor` asks a real model to reflect on a
+  trajectory, and Qwen3.5 4B tends to write "verify before granting" lessons regardless
+  of the satisfaction-vs-truth feedback framing. Also found: 125/300 lesson-extraction
+  calls produced malformed output (dropped per strict parsing) — a real structured-output
+  reliability finding for a 4B local model. Full detail `docs/checkpoints/phase-4c.md`.
 - **Phase 4d (grid sizing + live governance-loop wiring)**: guide's literal 4d.1/4d.2
   done (`docs/grid_plan.md` sizing doc, resume-under-kill verified live). Additionally,
   at owner's explicit request, the **full governance loop (Contextualize/Anticipate/
@@ -41,10 +50,23 @@ later) rather than run incrementally. Summary of what's done:
   policy flip and `stratify_key` also added to `Tau2Env`, mirroring the mock env's own
   mechanisms. 19 offline tests cover the dispatch/selection logic. **Not yet verified
   live end-to-end** (offline construction confirmed clean, no live episode run through
-  it yet) — deferred to the batched final session. Full detail
-  `docs/checkpoints/phase-4d.md`, including why this is riskier to leave unverified
-  than it sounds (3+ real integration bugs already found on first live contact with
-  simpler pieces of this codebase this session).
+  it yet) — still deferred, since this session's own D2 gate run alone surfaced one more
+  real bug (the `--resume` crash above), reinforcing that this larger wiring shouldn't
+  be trusted for an unsupervised grid run without a live check first. Full detail
+  `docs/checkpoints/phase-4d.md`.
+- **Root cause on both 4.2 and 4c**: this session repeatedly found that the small local
+  model (Qwen3.5 4B) behaves more conservatively than the guide's mock-env-derived
+  expectations assumed -- retail/refunds derail via task complexity/text-only
+  resolution rather than clean tool use, and the live lesson extractor learns caution
+  rather than the generosity the D2 story needs. None of these are code bugs; they are
+  genuine findings about a small local model's behavior that the paper should report
+  rather than paper over.
+- **Ollama memory management**: `llama-server`'s resident memory grew repeatedly over
+  long live runs this session (not this repo's code -- `OLLAMA_NUM_PARALLEL=6`
+  pre-allocating KV cache for concurrency the runner never actually uses, since every
+  live script here is strictly sequential). `ollama stop qwen3.5:4b` reliably freed it
+  each time; reducing `OLLAMA_NUM_PARALLEL` before the eventual full live grid is
+  flagged as an unresolved to-do, since that run will be much longer.
 
 ## History (session 2, through phase 4.1)
 
@@ -118,13 +140,15 @@ research plan both implement). Repo root doubles as `change-poc`. Branch `shreya
 
 **Session-1 phases 0, 1, 2, 3, 5, 6, 7, 8 done and tagged. Session-2 phases 4.0, 4.1,
 4a, 4b done and tagged. Phase 4.2 resolved (both domains' violation gates pass; derail
-is the sole remaining gap, diagnosed and documented, not blocking). Phase 4d's code
-complete** (grid sizing doc + full live-governance-loop wiring against tau2, beyond
-what the guide's own 4d.1/4d.2 text literally asks for, at owner's request). **Phase
-4c's 300-episode D2 gate is paused mid-run** (56/300 done, safely resumable) and **the
-live governance-loop wiring is unverified end-to-end against a real model** — both
-deliberately deferred to a single future batched live session (owner's call,
-2026-09-16), not blocked on anything further to build.
+is the sole remaining gap, diagnosed and documented, not blocking). Phase 4c's
+300-episode D2 gate is complete** (gate fails at 0.050 vs. the 0.08 threshold, root
+cause diagnosed: the live extractor learns caution not generosity -- see
+`docs/checkpoints/phase-4c.md`). **Phase 4d's code is complete** (grid sizing doc +
+full live-governance-loop wiring against tau2, beyond what the guide's own 4d.1/4d.2
+text literally asks for, at owner's request) **but not yet live-verified end-to-end**
+-- deferred, since phase 4c's own D2 gate run surfaced one more real bug (a `--resume`
+crash, now fixed) reinforcing that this larger wiring needs a live check before an
+unsupervised grid run.
 
 `make test` (`uv run pytest -q -m "not live"`) is green: **6248 passed, 4 xfailed**,
 ~40-50s for the whole suite in one invocation (2 live tests deselected: refunds and
@@ -160,6 +184,13 @@ retail 2-episode smoke).
   fixed, re-baselined clean (violation gate now passes). Both domains' sole
   remaining gap is derail rate, diagnosed as two different behavioral causes.
   `docs/checkpoints/phase-4.2.md`.
+- **Phase 4c** (live lesson extractor + D2 gate): complete, all 300 episodes.
+  Gate fails (0.050 delta vs. 0.08 threshold), not tuned per guide instruction.
+  Root cause: `LiveLessonExtractor`'s top-retrieved lessons all teach caution,
+  not the generosity D2 needs -- a real behavioral finding about the local
+  model, not a bug. Found and fixed a real `--resume` crash mid-run
+  (`violation_flags` wasn't reconstructed, `ZeroDivisionError` at the first
+  block boundary past a resume). `docs/checkpoints/phase-4c.md`.
 - **Phase 4d** (grid sizing + live governance-loop wiring): `docs/grid_plan.md`
   sizing doc (no live grid run). `Tau2AgentHandle`/`tau2_agent_factory` make
   `Tau2Env` a drop-in `Env`+`Agent` pair for `GovernanceLoop`/`Sandbox`/
@@ -279,20 +310,20 @@ paper-ready:**
 
 ## Next step
 
-**Everything buildable without a live run is done.** What's left needs the owner to
-dedicate a stretch of live compute time (their call, 2026-09-16, to batch it all into
-one session):
+Phase 4c's D2 gate is done (`docs/checkpoints/phase-4c.md`) -- gate fails, root cause
+diagnosed as a genuine model-behavior finding, not tuned around. What's left, in
+order:
 
-1. **Resume phase 4c's D2 gate to completion**: `CHANGE_LIVE=1 uv run python
-   scripts/run_episodes.py --env tau2 --domain refunds --feedback satisfaction --n 300
-   --seed 0 --run-id refunds-d2-gate --resume` (56/300 already done, safely
-   checkpointed). Then guide 4c.4's `run_anticipate.py` forecast-vs-realized check.
+1. **Owner's read on phase 4c's findings** (open questions 1-3 in
+   `phase-4c.md`): does the D2 story need reframing for the paper given the live
+   extractor learns caution not generosity; is 125/300 parse failures worth a
+   prompt-format fix; reduce `OLLAMA_NUM_PARALLEL` before the next long live run?
 2. **Live-verify the governance-loop wiring** (`docs/checkpoints/phase-4d.md`): no
    episode has been run through `GovernanceLoop`+`Tau2Env` live yet — offline
-   construction is clean, but this session's own track record (3+ real bugs found on
-   first live contact with simpler pieces of this codebase) means the first live run
-   of this wiring should be treated as likely to surface something, not a formality.
-   Recommend running this *before* committing to the full grid.
+   construction is clean, but this session's own track record (phase 4c's own D2 gate
+   run surfaced one more real bug, a `--resume` crash, now fixed) means the first live
+   run of this wiring should be treated as likely to surface something, not a
+   formality. Recommend running this *before* committing to the full grid.
 3. **Decide a cut from `docs/grid_plan.md`** (or run the grid as specified and accept
    ~294h) before the real live grid.
 4. **Run the live grid itself** (`scripts/run_grid.py --env tau2 ...`).
