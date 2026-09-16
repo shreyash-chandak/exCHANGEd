@@ -67,27 +67,44 @@ def _run_mock(
     typer.echo(f"done: {n} episodes written to {Path(runs_dir) / run_id}")
 
 
-def _resume_state(run_dir: Path) -> tuple[int, int, LessonMemory]:
-    """Reconstructs (episodes_already_done, next_t_global, memory) from
-    an existing run dir's JsonlStore contents (session-2 guide 4d.2's
-    resumability): every completed episode wrote exactly one distinct
-    episode_id worth of ExperienceRecords, so that count is the loop
-    iteration to resume from; the total record count is where t_global
-    must continue from (t_global is a 0-based count of decision records
-    in the run, guide 2.1); replaying Lesson.jsonl's lessons back into a
-    fresh LessonMemory in the same (append) order reconstructs its exact
-    prior state, cap-eviction included. No separate marker file needed --
-    the append-only store already has everything required."""
+def _resume_state(run_dir: Path) -> tuple[int, int, LessonMemory, list[bool]]:
+    """Reconstructs (episodes_already_done, next_t_global, memory,
+    violation_flags) from an existing run dir's JsonlStore contents
+    (session-2 guide 4d.2's resumability): every completed episode wrote
+    exactly one distinct episode_id worth of ExperienceRecords, so that
+    count is the loop iteration to resume from; the total record count is
+    where t_global must continue from (t_global is a 0-based count of
+    decision records in the run, guide 2.1); replaying Lesson.jsonl's
+    lessons back into a fresh LessonMemory in the same (append) order
+    reconstructs its exact prior state, cap-eviction included.
+    `violation_flags` (one bool per already-done episode, in episode
+    order) is needed too -- found live: without it, resuming partway
+    through a run crashed with ZeroDivisionError the next time the
+    per-50-episode block report fired, since the *global* episode index
+    (continuing from `already_done`) hit a multiple of 50 long before
+    this process's own, freshly-empty `violation_flags` list had 50
+    entries in it. No separate marker file needed -- the append-only
+    store already has everything required."""
     store = JsonlStore(run_dir)
     memory = LessonMemory(cap=MEMORY_CAP)
     for lesson in store.iter(Lesson):
         memory.add(lesson)
-    episode_ids: set[str] = set()
+
+    episode_order: list[str] = []
+    episode_records: dict[str, list[ExperienceRecord]] = {}
     n_records = 0
     for record in store.iter(ExperienceRecord):
-        episode_ids.add(record.episode_id)
+        if record.episode_id not in episode_records:
+            episode_order.append(record.episode_id)
+            episode_records[record.episode_id] = []
+        episode_records[record.episode_id].append(record)
         n_records += 1
-    return len(episode_ids), n_records, memory
+
+    violation_flags = [
+        not all(r.policy_eval.compliant for r in episode_records[episode_id])
+        for episode_id in episode_order
+    ]
+    return len(episode_order), n_records, memory, violation_flags
 
 
 def _run_tau2(
@@ -113,9 +130,10 @@ def _run_tau2(
     run_dir = Path(runs_dir) / run_id
     already_done = 0
     memory = LessonMemory(cap=MEMORY_CAP)
+    violation_flags: list[bool] = []
     env_obj = Tau2Env(domain=domain, run_id=run_id)
     if resume:
-        already_done, next_t_global, memory = _resume_state(run_dir)
+        already_done, next_t_global, memory, violation_flags = _resume_state(run_dir)
         if already_done:
             typer.echo(f"resuming: {already_done} episode(s) already recorded in {run_dir}")
             env_obj.set_t_global(next_t_global)
@@ -125,7 +143,6 @@ def _run_tau2(
     task_ids = env_obj.task_ids()
     store = JsonlStore(run_dir)
 
-    violation_flags: list[bool] = []
     for i in range(already_done, n):
         task_id = task_ids[i % len(task_ids)]
         episode_seed = seed * 1_000_003 + i
