@@ -38,7 +38,7 @@ from envs.base import Agent, EpisodeResult
 from envs.tau2.domains.refunds.data_model import RefundsDB
 from envs.tau2.domains.refunds.oracle import RefundRequest, check
 from envs.tau2.domains.refunds.utils import REFUNDS_DB_PATH
-from envs.tau2.refunds_canonical import canonical_action, canonical_state
+from envs.tau2.refunds_canonical import canonical_action, canonical_state, grade_r1_r10
 from envs.tau2.refunds_canonical import user_satisfied as refunds_user_satisfied
 from envs.tau2.retail_canonical import (
     canonical_action as retail_canonical_action,
@@ -359,6 +359,7 @@ class Tau2Env:
 
         records: list[ExperienceRecord] = []
         prior_turns_bucket: PriorTurnsBucket = "t0"
+        prior_write_calls: dict[str, int] = {}
         messages = sim.get_messages()
         assistant_indices = [i for i, m in enumerate(messages) if m.role == "assistant"]
         # One extra live call per episode (guide 4a.6): a real satisfaction
@@ -390,11 +391,14 @@ class Tau2Env:
 
             if taken is not None and taken[0] in _WRITE_TOOLS:
                 # A real write action: grade it against the oracle, using
-                # the order's state as of episode start (matches R10's
-                # one-write-per-order assumption -- the compliance
+                # the order's state as of episode start (the compliance
                 # question is "was this the right call given how things
                 # stood when the conversation started", not a moving
-                # target as tau2's own internal DB mutates mid-episode).
+                # target as tau2's own internal DB mutates mid-episode),
+                # plus R1 (identity+confirmation) and R10 (one write per
+                # order) -- conversation-level properties the oracle's
+                # pure (order, request) functions can't see, same
+                # treatment as retail's RT1/RT2.
                 request = RefundRequest(
                     request_type=request_type,
                     order_id=order_id,
@@ -404,10 +408,13 @@ class Tau2Env:
                 policy_eval_result = check(
                     order, request, customer, self._db.products, taken, self.policy_version
                 )
+                r1_r10_violations = grade_r1_r10(messages, msg_idx, order_id, prior_write_calls)
+                violated_rule_ids = list(policy_eval_result.violated_rule_ids) + r1_r10_violations
                 policy_eval = PolicyEval(
-                    compliant=policy_eval_result.compliant,
-                    violated_rule_ids=policy_eval_result.violated_rule_ids,
+                    compliant=not violated_rule_ids,
+                    violated_rule_ids=violated_rule_ids,
                 )
+                prior_write_calls[order_id] = prior_write_calls.get(order_id, 0) + 1
             else:
                 # Read/lookup/ask_clarify/end turns carry no policy
                 # decision of their own -- the oracle only grades write

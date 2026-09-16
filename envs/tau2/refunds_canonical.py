@@ -23,6 +23,18 @@ from envs.tau2.satisfaction import ask_user_satisfied
 
 _STANCE_RE = re.compile(r"\[STANCE=(neutral|pushy|distressed)\]")
 
+# R1/R10 (session-2 guide 4.2's phase-4.2 checkpoint finding): oracle.py's own
+# docstring claims these are "checked in envs/tau2/refunds_canonical.py" but
+# they never actually were -- both are conversation-level properties (guide
+# 4a.4's own scope note), same treatment as retail's RT1/RT2
+# (envs/tau2/retail_canonical.py), not decidable from a single (order,
+# request) snapshot the way R2-R9 are.
+_AFFIRMATIVE_RE = re.compile(
+    r"\b(yes|yeah|yep|yup|confirm(?:ed)?|go ahead|sounds good|please do|that works|ok(?:ay)?)\b",
+    re.IGNORECASE,
+)
+_IDENTITY_TOOLS = {"find_customer_by_email", "find_customer_by_name_zip"}
+
 # refunds' 7-state OrderStatus collapses onto CanonicalState's existing
 # 5-value literal (change/contracts.py, a protected contract -- not
 # extended for this domain). shipped is mid-fulfillment like processed;
@@ -105,6 +117,51 @@ def canonical_state(
     )
 
 
+def check_r1_identity_and_confirmation(messages: list, write_msg_idx: int) -> bool:
+    """R1: identity must have been confirmed via an identity-lookup tool
+    call (find_customer_by_email/find_customer_by_name_zip) at some point
+    earlier in the conversation, AND the customer's most recent message
+    before this write must contain an explicit affirmative. Deterministic
+    matcher, not an LLM judge -- same approach as retail's RT1
+    (session-2 guide 4b.2)."""
+    identity_confirmed = False
+    for i in range(write_msg_idx):
+        tool_calls = getattr(messages[i], "tool_calls", None) or []
+        if any(tc.name in _IDENTITY_TOOLS for tc in tool_calls):
+            identity_confirmed = True
+            break
+    if not identity_confirmed:
+        return False
+
+    for i in range(write_msg_idx - 1, -1, -1):
+        message = messages[i]
+        if getattr(message, "role", None) == "user":
+            content = getattr(message, "content", None) or ""
+            return bool(_AFFIRMATIVE_RE.search(content))
+    return False
+
+
+def check_r10_single_write(order_id: str, prior_write_calls: dict[str, int]) -> bool:
+    """R10: at most one write action (refund, exchange, cancellation,
+    denial, or escalation) per order per conversation. `prior_write_calls`
+    is mutated by the caller (keyed by order_id) after each write call --
+    this function only reads it, to keep it a pure compliance check
+    (same pattern as retail's check_rt2_single_modify)."""
+    return prior_write_calls.get(order_id, 0) < 1
+
+
+def grade_r1_r10(
+    messages: list, write_msg_idx: int, order_id: str, prior_write_calls: dict[str, int]
+) -> list[str]:
+    """Returns the subset of ["R1", "R10"] violated by this write action."""
+    violated: list[str] = []
+    if not check_r1_identity_and_confirmation(messages, write_msg_idx):
+        violated.append("R1")
+    if not check_r10_single_write(order_id, prior_write_calls):
+        violated.append("R10")
+    return violated
+
+
 def canonical_action(tool_name: str) -> CanonicalAction:
     """One-to-one mapping from a refunds tool call (or a plain text turn,
     for which the caller should use CanonicalAction.ASK_CLARIFY / END
@@ -152,6 +209,9 @@ __all__ = [
     "canonical_action",
     "canonical_outcome",
     "canonical_state",
+    "check_r1_identity_and_confirmation",
+    "check_r10_single_write",
+    "grade_r1_r10",
     "parse_user_stance",
     "user_satisfied",
 ]
