@@ -213,6 +213,13 @@ class Tau2Env:
     def t_global(self) -> int:
         return self._t_global
 
+    def set_t_global(self, value: int) -> None:
+        """Lets a resuming caller (scripts/run_episodes.py's --resume,
+        guide 4d.2) continue t_global from where a prior, interrupted run
+        of the same run_id left off, instead of restarting the count at 0
+        and colliding with already-written records' t_global values."""
+        self._t_global = value
+
     def run_episode(self, task_id: str, agent: Agent, seed: int) -> EpisodeResult:
         task = self._tasks[task_id]
         # retail's D3 policy is a separate registered domain variant

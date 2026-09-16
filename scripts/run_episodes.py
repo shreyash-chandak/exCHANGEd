@@ -11,6 +11,7 @@ from pathlib import Path
 import typer
 
 from change.config import LIVE, MEMORY_CAP, settings
+from change.contracts import ExperienceRecord, Lesson
 from change.generate import MockLessonExtractor
 from change.memory import LessonMemory
 from change.store import JsonlStore
@@ -66,7 +67,32 @@ def _run_mock(
     typer.echo(f"done: {n} episodes written to {Path(runs_dir) / run_id}")
 
 
-def _run_tau2(domain: str, feedback: str, n: int, seed: int, run_id: str, runs_dir: str) -> None:
+def _resume_state(run_dir: Path) -> tuple[int, int, LessonMemory]:
+    """Reconstructs (episodes_already_done, next_t_global, memory) from
+    an existing run dir's JsonlStore contents (session-2 guide 4d.2's
+    resumability): every completed episode wrote exactly one distinct
+    episode_id worth of ExperienceRecords, so that count is the loop
+    iteration to resume from; the total record count is where t_global
+    must continue from (t_global is a 0-based count of decision records
+    in the run, guide 2.1); replaying Lesson.jsonl's lessons back into a
+    fresh LessonMemory in the same (append) order reconstructs its exact
+    prior state, cap-eviction included. No separate marker file needed --
+    the append-only store already has everything required."""
+    store = JsonlStore(run_dir)
+    memory = LessonMemory(cap=MEMORY_CAP)
+    for lesson in store.iter(Lesson):
+        memory.add(lesson)
+    episode_ids: set[str] = set()
+    n_records = 0
+    for record in store.iter(ExperienceRecord):
+        episode_ids.add(record.episode_id)
+        n_records += 1
+    return len(episode_ids), n_records, memory
+
+
+def _run_tau2(
+    domain: str, feedback: str, n: int, seed: int, run_id: str, runs_dir: str, resume: bool
+) -> None:
     """Memory-injecting path (session-2 guide 4c): drives episodes
     through LessonAgent + a live LessonMemory + LiveLessonExtractor,
     mirroring _run_mock's loop shape. This is what guide 4c.3's D2 gate
@@ -84,15 +110,23 @@ def _run_tau2(domain: str, feedback: str, n: int, seed: int, run_id: str, runs_d
     from change.generate import LiveLessonExtractor
     from envs.tau2.adapter import Tau2Env
 
+    run_dir = Path(runs_dir) / run_id
+    already_done = 0
     memory = LessonMemory(cap=MEMORY_CAP)
+    env_obj = Tau2Env(domain=domain, run_id=run_id)
+    if resume:
+        already_done, next_t_global, memory = _resume_state(run_dir)
+        if already_done:
+            typer.echo(f"resuming: {already_done} episode(s) already recorded in {run_dir}")
+            env_obj.set_t_global(next_t_global)
+
     gates: dict = {}
     extractor = LiveLessonExtractor(feedback=feedback)
-    env_obj = Tau2Env(domain=domain, run_id=run_id)
     task_ids = env_obj.task_ids()
-    store = JsonlStore(Path(runs_dir) / run_id)
+    store = JsonlStore(run_dir)
 
     violation_flags: list[bool] = []
-    for i in range(n):
+    for i in range(already_done, n):
         task_id = task_ids[i % len(task_ids)]
         episode_seed = seed * 1_000_003 + i
         typer.echo(f"[{i + 1}/{n}] {task_id} (memory_version={memory.version}) ...")
@@ -136,13 +170,16 @@ def main(
         None, help="D3: episode count at which the mock policy tightens. Mock only."
     ),
     runs_dir: str = typer.Option(settings.runs_dir),
+    resume: bool = typer.Option(
+        False, "--resume", help="tau2 only: skip episodes already recorded under --run-id."
+    ),
 ) -> None:
     if env == "mock":
         _run_mock(feedback, n, seed, run_id, n_tasks, policy_update_at_episode, runs_dir)
     elif env == "tau2":
         if not LIVE:
             raise typer.BadParameter("--env tau2 requires CHANGE_LIVE=1 (see .env.example)")
-        _run_tau2(domain, feedback, n, seed, run_id, runs_dir)
+        _run_tau2(domain, feedback, n, seed, run_id, runs_dir, resume)
     else:
         raise typer.BadParameter("--env must be 'mock' or 'tau2'")
 
