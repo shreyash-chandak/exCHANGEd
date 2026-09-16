@@ -54,6 +54,7 @@ from envs.tau2.retail_canonical import user_satisfied as retail_user_satisfied
 from tau2.data_model.simulation import SimulationRun, TextRunConfig
 from tau2.domains.retail.data_model import RetailDB
 from tau2.domains.retail.utils import RETAIL_DB_PATH
+from tau2.evaluator.evaluator import EvaluationType
 from tau2.run import get_tasks, run_single_task
 
 _RETAIL_WRITE_TOOLS = {
@@ -170,7 +171,22 @@ class Tau2Env:
             llm_args_user=dict(_THINKING_DISABLED_LLM_ARGS),
             max_steps=self.max_steps,
         )
-        sim = run_single_task(config, task, seed=seed)
+        # Pin evaluation_type off tau2's default (EvaluationType.ALL):
+        # ALL runs NL_ASSERTIONS whenever a task's reward_basis includes
+        # it, and NL_ASSERTIONS is graded by a *hardcoded* model
+        # (tau2.config.DEFAULT_LLM_NL_ASSERTIONS = "gpt-4.1-2025-04-14",
+        # ignoring our own CHANGE_LLM_MODEL entirely) -- found live, some
+        # retail tasks do have NL_ASSERTIONS in their reward_basis (docs/
+        # tau2_interfaces.md item 4's "retail's reward_basis = [DB,
+        # COMMUNICATE]" isn't universal), which would otherwise attempt a
+        # real OpenAI call with no key configured. ALL_IGNORE_BASIS
+        # evaluates ENV/COMMUNICATE/ACTION only, never NL_ASSERTIONS --
+        # matches the guide's "no API spend" constraint and this repo's
+        # own compliance signal (the oracle/RT-checks), which never used
+        # NL_ASSERTIONS anyway.
+        sim = run_single_task(
+            config, task, seed=seed, evaluation_type=EvaluationType.ALL_IGNORE_BASIS
+        )
         if self.domain == "refunds":
             records = self._canonicalize_refunds(task, sim, agent)
         else:
