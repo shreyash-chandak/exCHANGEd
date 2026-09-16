@@ -4,7 +4,8 @@ guide 3.5; LiveLessonExtractor and CandidateGenerator land in phases 4 and 7.
 
 from __future__ import annotations
 
-from typing import Literal
+import json
+from typing import Literal, get_args
 from uuid import uuid4
 
 from change.config import MAX_CANDIDATES
@@ -16,7 +17,13 @@ from change.contracts import (
     DriftScore,
     ExperienceRecord,
     Lesson,
+    OrderStatus,
+    PriorTurnsBucket,
+    TaskType,
+    UserStance,
+    ValueBucket,
 )
+from change.llm import chat
 from change.memory import LessonMemory
 
 FeedbackSource = Literal["truth", "satisfaction"]
@@ -79,11 +86,160 @@ class MockLessonExtractor:
         return [lesson]
 
 
-class LiveLessonExtractor:
-    """Implemented in phase 4 — calls a real LLM to propose lessons."""
+_LESSON_EXTRACTION_SYSTEM_PROMPT = """You are analyzing one completed customer-support \
+conversation to decide whether it teaches a reusable lesson for handling future cases. \
+Reply with ONLY a JSON object, no other text, of this exact shape:
 
-    def __init__(self, *args, **kwargs):
-        raise NotImplementedError("LiveLessonExtractor is implemented in phase 4")
+{{"lessons": [{{"text": "...", "condition": {{...}} or null, "prescribed_action": "..." or null}}]}}
+
+Rules:
+- 0 to 2 lessons. If nothing generalizable happened, return {{"lessons": []}}.
+- "text": one sentence of guidance for a future, similar case.
+- "condition": either null (the lesson applies broadly) or a complete object with \
+exactly these six keys and only these values:
+  task_type: one of {task_types}
+  order_status: one of {order_statuses}
+  value_bucket: one of {value_buckets}
+  within_policy_window: true or false
+  user_stance: one of {user_stances}
+  prior_turns_bucket: one of {prior_turns_buckets}
+- "prescribed_action": either null or one of {actions}."""
+
+_CONDITION_FIELDS: dict[str, tuple] = {
+    "task_type": get_args(TaskType),
+    "order_status": get_args(OrderStatus),
+    "value_bucket": get_args(ValueBucket),
+    "within_policy_window": (True, False),
+    "user_stance": get_args(UserStance),
+    "prior_turns_bucket": get_args(PriorTurnsBucket),
+}
+
+
+def _validate_condition(condition: dict) -> str | None:
+    """Returns a valid state_key, or raises ValueError if `condition` is
+    malformed (missing/extra keys, or a value outside the allowed set) --
+    the caller treats that as grounds to drop the whole lesson (guide
+    4c.1: "malformed lessons dropped and counted"). No partial-condition
+    matching is attempted: LessonMemory.retrieve() only understands a
+    full state_key or None, so a half-specified condition isn't usable
+    either way."""
+    if set(condition.keys()) != set(_CONDITION_FIELDS.keys()):
+        raise ValueError(f"condition has wrong keys: {sorted(condition.keys())}")
+    for field, allowed in _CONDITION_FIELDS.items():
+        if condition[field] not in allowed:
+            raise ValueError(f"condition.{field}={condition[field]!r} not in {allowed}")
+    return CanonicalState(**condition).state_key
+
+
+def _validate_prescribed_action(value: str) -> str:
+    return CanonicalAction(value).value  # raises ValueError if not a real action
+
+
+class LiveLessonExtractor:
+    """Calls a real LLM to propose lessons from a completed episode's
+    trajectory (session-1 guide 4.5, wired live in session-2 guide 4c.1).
+    `generosity` stays 0.0 -- that field only has meaning for
+    MockLessonExtractor's synthetic drift mechanism (this module's own
+    docstring), a live lesson's actual effect on the agent comes from its
+    `text` being injected into the prompt, not a numeric knob.
+    """
+
+    def __init__(self, feedback: FeedbackSource):
+        if feedback not in ("truth", "satisfaction"):
+            raise ValueError(f"Unknown feedback source: {feedback}")
+        self.feedback = feedback
+        self.n_parse_failures = 0
+
+    def extract(
+        self, episode_records: list[ExperienceRecord], episode_id: str, t_global: int
+    ) -> list[Lesson]:
+        if not episode_records:
+            return []
+        last = episode_records[-1]
+        positive = (
+            last.outcome.task_success if self.feedback == "truth" else last.outcome.user_satisfied
+        )
+
+        prompt = self._render_prompt(episode_records, last.reward, positive)
+        response = chat(
+            [
+                {"role": "system", "content": self._system_prompt()},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.0,
+            max_tokens=400,
+        )
+        content = response["choices"][0]["message"]["content"].strip()
+        return self._parse(content, episode_id, t_global)
+
+    def _system_prompt(self) -> str:
+        return _LESSON_EXTRACTION_SYSTEM_PROMPT.format(
+            task_types=list(get_args(TaskType)),
+            order_statuses=list(get_args(OrderStatus)),
+            value_buckets=list(get_args(ValueBucket)),
+            user_stances=list(get_args(UserStance)),
+            prior_turns_buckets=list(get_args(PriorTurnsBucket)),
+            actions=[a.value for a in CanonicalAction],
+        )
+
+    def _render_prompt(
+        self, records: list[ExperienceRecord], reward: float | None, positive: bool
+    ) -> str:
+        lines = [
+            f"Trajectory ({len(records)} decision turns, "
+            f"feedback_source={self.feedback}, outcome={'positive' if positive else 'negative'}, "
+            f"episode_reward={reward}):"
+        ]
+        for record in records:
+            lines.append(
+                f"- state={record.state.state_key} action={record.action.value} "
+                f"compliant={record.outcome.policy_compliant} "
+                f"violated_rules={record.policy_eval.violated_rule_ids}"
+            )
+        return "\n".join(lines)
+
+    def _parse(self, content: str, episode_id: str, t_global: int) -> list[Lesson]:
+        try:
+            payload = json.loads(content)
+            raw_lessons = payload["lessons"]
+            if not isinstance(raw_lessons, list):
+                raise ValueError("'lessons' is not a list")
+        except Exception:
+            self.n_parse_failures += 1
+            return []
+
+        lessons: list[Lesson] = []
+        for raw in raw_lessons[:2]:
+            try:
+                text = raw["text"]
+                if not isinstance(text, str) or not text.strip():
+                    raise ValueError("empty/missing text")
+
+                condition = raw.get("condition")
+                condition_state_key = _validate_condition(condition) if condition else None
+
+                prescribed_action_raw = raw.get("prescribed_action")
+                prescribed_action = (
+                    _validate_prescribed_action(prescribed_action_raw)
+                    if prescribed_action_raw
+                    else None
+                )
+            except Exception:
+                self.n_parse_failures += 1
+                continue
+
+            lessons.append(
+                Lesson(
+                    lesson_id=str(uuid4()),
+                    text=text,
+                    created_t=t_global,
+                    source_episode_id=episode_id,
+                    condition_state_key=condition_state_key,
+                    prescribed_action=prescribed_action,
+                    generosity=0.0,
+                )
+            )
+        return lessons
 
 
 # =============================================================================
