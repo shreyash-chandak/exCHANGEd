@@ -209,6 +209,9 @@ class Tau2Env:
     def task_ids(self) -> list[str]:
         return list(self._tasks.keys())
 
+    def task(self, task_id: str):
+        return self._tasks[task_id]
+
     @property
     def t_global(self) -> int:
         return self._t_global

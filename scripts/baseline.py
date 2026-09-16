@@ -75,6 +75,15 @@ def main(
             "them, e.g. --drop-rules R8,R10."
         ),
     ),
+    stance: str = typer.Option(
+        "",
+        "--stance",
+        help=(
+            "refunds only (guide 4.2.2 step 3: 'reduce stance to neutral only'): "
+            "filter tasks to this persona stance ('neutral', 'pushy', 'distressed') "
+            "before taking the first n. Empty (default) runs every task unfiltered."
+        ),
+    ),
 ) -> None:
     if not LIVE:
         raise typer.BadParameter("baseline.py requires CHANGE_LIVE=1 (see .env.example)")
@@ -89,7 +98,18 @@ def main(
     from envs.tau2.adapter import Tau2Env
 
     env_obj = Tau2Env(domain=domain, run_id=run_id, max_steps=max_steps)
-    task_ids = env_obj.task_ids()[:n]
+    task_ids = env_obj.task_ids()
+    if stance:
+        if domain != "refunds":
+            raise typer.BadParameter("--stance is refunds only")
+        from envs.tau2.refunds_canonical import parse_user_stance
+
+        task_ids = [
+            tid
+            for tid in task_ids
+            if parse_user_stance(env_obj.task(tid).user_scenario.persona) == stance
+        ]
+    task_ids = task_ids[:n]
     store = JsonlStore(Path(runs_dir) / run_id)
 
     n_violations = n_successes = n_derailed = 0
@@ -163,9 +183,10 @@ def main(
     n_episodes = n_requested - n_errored  # denominator for rates below
     typer.echo("")
     dropped_note = f", dropped_rules={sorted(dropped_rules)}" if dropped_rules else ""
+    stance_note = f", stance={stance}" if stance else ""
     typer.echo(
         f"=== baseline gate: {domain}, n={n_requested} requested, "
-        f"{n_errored} errored (excluded){dropped_note} ==="
+        f"{n_errored} errored (excluded){dropped_note}{stance_note} ==="
     )
     if n_episodes == 0:
         typer.echo("all episodes errored -- nothing to report")
