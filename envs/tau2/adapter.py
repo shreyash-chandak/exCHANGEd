@@ -224,6 +224,7 @@ class Tau2Env:
         agent_name: str = "llm_agent",
         policy_version: str = "v1",
         max_steps: int = 20,
+        policy_update_at_episode: int | None = None,
     ):
         if domain not in ("refunds", "retail"):
             raise NotImplementedError(f"only refunds/retail are wired up, got {domain!r}")
@@ -232,6 +233,15 @@ class Tau2Env:
         self.agent_name = agent_name
         self.policy_version = policy_version
         self.max_steps = max_steps
+        # D3 live-grid support (session-2 guide 4d, mirrors
+        # envs/mock/mock_env.py::MockRetailEnv's own policy_update_at_episode):
+        # when set, `policy_version` above is ignored in favor of a dynamic
+        # v1 -> v3 flip at this episode count, so the same task pool runs
+        # under the base policy and then, mid-run, the tightened one --
+        # "same population of requests, policy silently got stricter" is
+        # the D3 story, not a fixed policy_version for the whole run.
+        self.policy_update_at_episode = policy_update_at_episode
+        self._episode_count = 0
         if domain == "refunds":
             import envs.tau2.domains.refunds_d3  # noqa: F401 -- registers "refunds_d3" at import
 
@@ -250,12 +260,37 @@ class Tau2Env:
     def task(self, task_id: str):
         return self._tasks[task_id]
 
-    def _tau2_domain_name(self) -> str:
+    def stratify_key(self, task_id: str) -> tuple[str, bool]:
+        """Lets TaskSplit (change/sandbox.py) stratify train/canary/sandbox
+        by (task_type, within_policy_window) instead of falling back to a
+        plain shuffle -- same rationale as MockRetailEnv.stratify_key
+        (docs/checkpoints/phase-7.md): without it, a small canary/sandbox
+        pool's sampling noise in the eligible-state fraction can bias
+        Sandbox/canary results independent of candidate quality. Pure,
+        offline, reuses the same context-extraction + canonical_state
+        functions the live episode path itself uses -- no new logic."""
+        task = self._tasks[task_id]
+        if self.domain == "refunds":
+            order, _customer, request_type, persona, _order_id = _refunds_episode_context(
+                task, self._db
+            )
+            state = canonical_state(order, request_type, persona, "t0")
+        else:
+            order, task_type, _order_id = _retail_episode_context(task, self._db)
+            state = retail_canonical_state(order, task_type, "t0")
+        return (state.task_type, state.within_policy_window)
+
+    def _current_policy_version(self) -> str:
+        if self.policy_update_at_episode is None:
+            return self.policy_version
+        return "v3" if self._episode_count >= self.policy_update_at_episode else "v1"
+
+    def _tau2_domain_name(self, policy_version: str) -> str:
         """D3's tightened policy is a separate registered tau2 domain
         (envs/tau2/domains/retail_d3.py, refunds_d3.py) -- same db/tools/
         tasks, swapped policy text, per guide 4b.3 ("no policy text change
         needed for [grading]... the agent's policy text is swapped")."""
-        if self.policy_version != "v3":
+        if policy_version != "v3":
             return self.domain
         return f"{self.domain}_d3"
 
@@ -275,7 +310,12 @@ class Tau2Env:
             return self.run_live_episode(task_id, agent.memory, agent.gates, seed)
 
         task = self._tasks[task_id]
-        tau2_domain = self._tau2_domain_name()
+        # Snapshot before incrementing (below) -- D3's episode-count-gated
+        # policy flip (self.policy_update_at_episode) must use the count
+        # as of the *start* of this episode, same ordering as
+        # MockRetailEnv._effective_window.
+        effective_policy_version = self._current_policy_version()
+        tau2_domain = self._tau2_domain_name(effective_policy_version)
         config = TextRunConfig(
             domain=tau2_domain,
             agent=self.agent_name,
@@ -302,10 +342,11 @@ class Tau2Env:
         sim = run_single_task(
             config, task, seed=seed, evaluation_type=EvaluationType.ALL_IGNORE_BASIS
         )
+        self._episode_count += 1
         if self.domain == "refunds":
-            records = self._canonicalize_refunds(task, sim, agent)
+            records = self._canonicalize_refunds(task, sim, agent, effective_policy_version)
         else:
-            records = self._canonicalize_retail(task, sim, agent)
+            records = self._canonicalize_retail(task, sim, agent, effective_policy_version)
         return EpisodeResult(records=records, reward=records[-1].reward if records else 0.0)
 
     def run_live_episode(
@@ -324,7 +365,8 @@ class Tau2Env:
         `tau2.runner.simulation.run_simulation`'s own docstring
         demonstrates (docs/tau2_interfaces.md item 2, option (b))."""
         task = self._tasks[task_id]
-        tau2_domain = self._tau2_domain_name()
+        effective_policy_version = self._current_policy_version()
+        tau2_domain = self._tau2_domain_name(effective_policy_version)
         environment = build_environment(tau2_domain)
 
         if self.domain == "refunds":
@@ -379,14 +421,23 @@ class Tau2Env:
             seed=seed,
         )
         sim = run_simulation(orchestrator, evaluation_type=EvaluationType.ALL_IGNORE_BASIS)
+        self._episode_count += 1
 
         if self.domain == "refunds":
             records = self._canonicalize_refunds(
-                task, sim, agent, lessons_by_turn=agent.lessons_in_context_by_turn
+                task,
+                sim,
+                agent,
+                effective_policy_version,
+                lessons_by_turn=agent.lessons_in_context_by_turn,
             )
         else:
             records = self._canonicalize_retail(
-                task, sim, agent, lessons_by_turn=agent.lessons_in_context_by_turn
+                task,
+                sim,
+                agent,
+                effective_policy_version,
+                lessons_by_turn=agent.lessons_in_context_by_turn,
             )
         return EpisodeResult(records=records, reward=records[-1].reward if records else 0.0)
 
@@ -395,6 +446,7 @@ class Tau2Env:
         task,
         sim: SimulationRun,
         agent: Agent,
+        policy_version: str,
         lessons_by_turn: list[list[str]] | None = None,
     ) -> list[ExperienceRecord]:
         order, customer, request_type, persona, order_id = _refunds_episode_context(task, self._db)
@@ -452,7 +504,7 @@ class Tau2Env:
                     new_product_ids=taken[1].get("new_product_ids", []),
                 )
                 policy_eval_result = check(
-                    order, request, customer, self._db.products, taken, self.policy_version
+                    order, request, customer, self._db.products, taken, policy_version
                 )
                 r1_r10_violations = grade_r1_r10(messages, msg_idx, order_id, prior_write_calls)
                 violated_rule_ids = list(policy_eval_result.violated_rule_ids) + r1_r10_violations
@@ -512,6 +564,7 @@ class Tau2Env:
         task,
         sim: SimulationRun,
         agent: Agent,
+        policy_version: str,
         lessons_by_turn: list[list[str]] | None = None,
     ) -> list[ExperienceRecord]:
         order, task_type, order_id = _retail_episode_context(task, self._db)
@@ -556,7 +609,7 @@ class Tau2Env:
                     taken[1],
                     order,
                     prior_modify_calls,
-                    self.policy_version,
+                    policy_version,
                 )
                 policy_eval = PolicyEval(
                     compliant=policy_eval_result.compliant,
