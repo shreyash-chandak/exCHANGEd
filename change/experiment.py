@@ -19,7 +19,8 @@ CONDITIONS = {
     # `truth` feedback most positive-feedback lessons came from non-generous
     # compliant actions, so the intended "stale memory causes violations
     # after the policy update" story didn't reproduce. Gated on episode
-    # count (see MockRetailEnv.policy_update_at_episode), not t_global.
+    # count (see MockRetailEnv/Tau2Env's policy_update_at_episode), not
+    # t_global.
     "d3": {"feedback": "satisfaction", "policy_update_at_episode": 200},
 }
 
@@ -28,6 +29,44 @@ def default_agent_factory(memory, gates, rng):
     from envs.mock.mock_agent import MockAgent
 
     return MockAgent(memory=memory, rng=rng, gates=gates)
+
+
+def _build_env_and_agent_factory(
+    env: str, domain: str, run_id: str, seed: int, n_tasks: int, cond: dict
+):
+    """Session-2 guide 4d: the live-tau2 counterpart to mock's
+    MockRetailEnv + default_agent_factory. Tau2Env + Tau2AgentHandle's
+    tau2_agent_factory is a drop-in Env+Agent pair for GovernanceLoop
+    (see envs/tau2/adapter.py::Tau2AgentHandle's docstring for why zero
+    changes were needed to change/loop.py, change/sandbox.py,
+    change/evolve.py to support this)."""
+    if env == "mock":
+        from envs.mock.mock_env import MockRetailEnv
+
+        return (
+            MockRetailEnv(
+                n_tasks=n_tasks,
+                seed=seed,
+                run_id=run_id,
+                policy_update_at_episode=cond["policy_update_at_episode"],
+            ),
+            default_agent_factory,
+        )
+    if env == "tau2":
+        from change.config import LIVE
+        from envs.tau2.adapter import Tau2Env, tau2_agent_factory
+
+        if not LIVE:
+            raise RuntimeError("--env tau2 requires CHANGE_LIVE=1 (see .env.example)")
+        return (
+            Tau2Env(
+                domain=domain,
+                run_id=run_id,
+                policy_update_at_episode=cond["policy_update_at_episode"],
+            ),
+            tau2_agent_factory,
+        )
+    raise ValueError(f"--env must be 'mock' or 'tau2', got {env!r}")
 
 
 def _cell_run_id(system: str, condition: str, seed: int) -> str:
@@ -52,14 +91,17 @@ def run_cell(
     n_episodes: int,
     out_dir: Path,
     n_tasks: int = 400,
-    agent_factory=default_agent_factory,
+    agent_factory=None,
     sim_trajectories: int | None = None,
     sim_horizon: int | None = None,
+    env: str = "mock",
+    domain: str = "refunds",
 ) -> dict:
     """Runs one grid cell unless already DONE; returns its flat metrics row
-    either way (freshly computed, or reloaded from a previous run)."""
-    from envs.mock.mock_env import MockRetailEnv
-
+    either way (freshly computed, or reloaded from a previous run).
+    `env`/`domain` select mock (default) or a live tau2 domain (session-2
+    guide 4d) -- `agent_factory` left as None picks the matching default
+    for whichever `env` was selected; pass explicitly to override."""
     run_id = _cell_run_id(system, condition, seed)
     run_dir = Path(out_dir) / run_id
     done_marker = run_dir / "DONE"
@@ -69,15 +111,12 @@ def run_cell(
         metrics = json.loads(metrics_path.read_text())
     else:
         cond = CONDITIONS[condition]
-        env = MockRetailEnv(
-            n_tasks=n_tasks,
-            seed=seed,
-            run_id=run_id,
-            policy_update_at_episode=cond["policy_update_at_episode"],
+        built_env, default_factory = _build_env_and_agent_factory(
+            env, domain, run_id, seed, n_tasks, cond
         )
         loop = GovernanceLoop(
-            env,
-            agent_factory,
+            built_env,
+            agent_factory if agent_factory is not None else default_factory,
             system=system,
             drift_condition={"feedback": cond["feedback"]},
             seed=seed,
@@ -113,9 +152,11 @@ def run_grid(
     n_episodes: int,
     out_dir: Path,
     n_tasks: int = 400,
-    agent_factory=default_agent_factory,
+    agent_factory=None,
     sim_trajectories: int | None = None,
     sim_horizon: int | None = None,
+    env: str = "mock",
+    domain: str = "refunds",
 ) -> list[dict]:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -135,6 +176,8 @@ def run_grid(
                         agent_factory,
                         sim_trajectories,
                         sim_horizon,
+                        env,
+                        domain,
                     )
                 )
 
