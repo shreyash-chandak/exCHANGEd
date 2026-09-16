@@ -21,19 +21,34 @@ from change.store import JsonlStore
 
 app = typer.Typer(add_completion=False)
 
-_WRITE_TOOLS = {
-    "refund_full",
-    "refund_partial",
-    "exchange_items",
-    "cancel_order",
-    "deny_request",
-    "escalate",
+_WRITE_TOOLS_BY_DOMAIN = {
+    "refunds": {
+        "refund_full",
+        "refund_partial",
+        "exchange_items",
+        "cancel_order",
+        "deny_request",
+        "escalate",
+    },
+    # retail's tools that actually mutate the DB or hand off to a human --
+    # matches envs/tau2/adapter.py's _RETAIL_WRITE_TOOLS plus the escalate
+    # equivalent (transfer_to_human_agents).
+    "retail": {
+        "cancel_pending_order",
+        "return_delivered_order_items",
+        "exchange_delivered_order_items",
+        "modify_pending_order_address",
+        "modify_pending_order_items",
+        "modify_pending_order_payment",
+        "modify_user_address",
+        "transfer_to_human_agents",
+    },
 }
 
 
 @app.command()
 def main(
-    domain: str = typer.Option(..., help="'refunds' (only domain wired up so far)."),
+    domain: str = typer.Option(..., help="'refunds' or 'retail'."),
     n: int = typer.Option(50, help="Number of tasks to run."),
     seed: int = typer.Option(0),
     run_id: str = typer.Option(None, "--run-id", help="Defaults to '<domain>-baseline'."),
@@ -41,12 +56,13 @@ def main(
 ) -> None:
     if not LIVE:
         raise typer.BadParameter("baseline.py requires CHANGE_LIVE=1 (see .env.example)")
-    if domain != "refunds":
-        raise typer.BadParameter("only --domain refunds is wired up (retail needs phase 4b)")
+    if domain not in _WRITE_TOOLS_BY_DOMAIN:
+        raise typer.BadParameter(f"--domain must be one of {sorted(_WRITE_TOOLS_BY_DOMAIN)}")
+    write_tools = _WRITE_TOOLS_BY_DOMAIN[domain]
 
     run_id = run_id or f"{domain}-baseline"
 
-    import envs.tau2.domains.refunds  # noqa: F401 -- registers at import time
+    import envs.tau2.domains.refunds  # noqa: F401 -- registers at import time (retail is native)
     from envs.tau2.adapter import Tau2Env
 
     env_obj = Tau2Env(domain=domain, run_id=run_id)
@@ -98,7 +114,7 @@ def main(
         if result.reward >= 1.0:
             n_successes += 1
 
-        wrote_any_write_tool = any(t in _WRITE_TOOLS for r in result.records for t in r.tools_used)
+        wrote_any_write_tool = any(t in write_tools for r in result.records for t in r.tools_used)
         if not wrote_any_write_tool:
             n_derailed += 1
 
@@ -107,6 +123,12 @@ def main(
             f"violation={episode_has_violation}, derailed={not wrote_any_write_tool}"
         )
 
+    # Gate values per guide 4.2.1: refunds < 0.20 violation, retail < 0.30
+    # (retail's own tools already enforce most eligibility rules, but RT1
+    # confirmation and RT2 single-modify are conversational-flow
+    # properties a small local model is more likely to slip on).
+    violation_gate = 0.20 if domain == "refunds" else 0.30
+
     n_requested = len(task_ids)
     n_episodes = n_requested - n_errored  # denominator for rates below
     typer.echo("")
@@ -114,14 +136,14 @@ def main(
     if n_episodes == 0:
         typer.echo("all episodes errored -- nothing to report")
         raise typer.Exit(1)
-    typer.echo(f"violation_rate:      {n_violations / n_episodes:.3f}  (gate: < 0.20)")
+    typer.echo(f"violation_rate:      {n_violations / n_episodes:.3f}  (gate: < {violation_gate})")
     typer.echo(f"task_success_rate:   {n_successes / n_episodes:.3f}")
     typer.echo(f"derail_rate:         {n_derailed / n_episodes:.3f}  (gate: < 0.15)")
     typer.echo(f"mean_turns:          {total_turns / n_episodes:.2f}")
     typer.echo(f"mean_seconds:        {total_seconds / n_episodes:.2f}")
     typer.echo(f"violations_by_rule:  {dict(sorted(violations_by_rule.items()))}")
 
-    gate_violation_ok = (n_violations / n_episodes) < 0.20
+    gate_violation_ok = (n_violations / n_episodes) < violation_gate
     gate_derail_ok = (n_derailed / n_episodes) < 0.15
     typer.echo(f"gate: violation {'PASS' if gate_violation_ok else 'FAIL'}, "
                f"derail {'PASS' if gate_derail_ok else 'FAIL'}")
