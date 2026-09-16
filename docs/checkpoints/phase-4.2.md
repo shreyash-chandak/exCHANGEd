@@ -1,15 +1,18 @@
-# Phase 4.2 checkpoint (session-2 guide, no-memory baseline gate) — STOP
+# Phase 4.2 checkpoint (session-2 guide, no-memory baseline gate) — RESOLVED
 
 `scripts/baseline.py --domain refunds --n 50` and `--domain retail --n 50`, empty
-memory, no gates, `max_steps=20`, against Ollama/qwen3.5:4b. Both gates fail, for
-two different, clearly diagnosed reasons. **This is the guide's own explicit STOP
-point 3 ("owner confirms the gate") — reporting honestly rather than proceeding.**
+memory, no gates, `max_steps=20`, against Ollama/qwen3.5:4b. Both gates originally
+failed, for two different, clearly diagnosed reasons — this was the guide's own
+explicit STOP point 3 ("owner confirms the gate").
 
-**Update:** owner-authorized remediation has since been run to completion for both
-domains (retail: `max_steps` swept 20→40→80; refunds: the guide's full three-step
-4.2.2 ladder run cumulatively). **Both domains still fail their gates after
-exhausting every avenue the guide authorizes** — see "Remediation results" below.
-Original diagnosis (further down) still explains *why*.
+**Resolution** (owner-authorized remediation run to completion for both domains):
+retail's `max_steps` swept 20→40→80 (accepted 80, diminishing returns beyond);
+refunds ran the guide's full three-step 4.2.2 ladder, then had a real grading gap
+fixed (R1/R10 were never actually checked) and was re-baselined clean. **Both
+domains' violation gates now pass; both still fail on derail rate specifically**,
+for two different, orthogonal, diagnosed behavioral reasons (not grading bugs) —
+see "Final status" below. Owner's call: proceed to phase 4c anyway, since it only
+needs a measurable drift signal, not a passing derail rate.
 
 ## Results
 
@@ -140,20 +143,56 @@ didn't authorize adding a new grading dimension mid-ladder) — flagging for a
 separate decision: implement R1/R10 grading (retail already has the equivalent
 RT1/RT2) and re-baseline, or accept the gap as a documented scope limit.
 
+## R1/R10 fix + corrected re-baseline (owner-authorized)
+
+`envs/tau2/refunds_canonical.py::check_r1_identity_and_confirmation`/
+`check_r10_single_write` implemented (same pattern as retail's RT1/RT2), wired
+into `_canonicalize_refunds`'s write-action branch. `policy.md` also reverted to
+its original (unshortened) prose -- the ladder's step 1 had made things worse, no
+reason to keep it. Re-ran the refunds baseline clean against this corrected
+pipeline:
+
+| variant | n | violation_rate | gate (< 0.20) | derail_rate | gate (< 0.15) | violations_by_rule |
+|---|---:|---:|---|---:|---|---|
+| original (R1/R10 never graded) | 50 | 0.200 | FAIL | 0.600 | FAIL | R3:2, R4:3, R5:1, R6:3, R7:1 |
+| **corrected (R1/R10 graded, original policy)** | 50 | **0.140** | **PASS** | 0.580 | FAIL | R1:2, R3:1, R4:1, R5:2, R6:2, R7:1 |
+
+**The corrected violation gate actually passes** (0.140 < 0.20) -- R1 catches 2
+real violations that were previously invisible, R10 catches zero (0 second-write
+attempts in this sample). Note this is a fresh 50-episode sample, not a replay of
+the exact same episodes (tau2's own documented provider-side nondeterminism, docs/
+tau2_interfaces.md item 12, means even seed=0 + temperature=0 reruns aren't
+bit-identical), so the drop from 0.200 to 0.140 isn't purely attributable to the
+grading fix -- but R1's 2 genuine violations are real regardless.
+
+**Derail (0.580) is still the one gate that doesn't pass for refunds** -- consistent
+with the diagnosis above (text-only denial instead of `deny_request`), which the
+R1/R10 fix doesn't touch since it's an orthogonal issue (whether a write happens
+at all, not whether a write that did happen was compliant).
+
+## Final status, both domains
+
+- **Retail**: violation gate passes (accepted at `max_steps=80`); derail gate
+  fails (50%, down from 92% at the default 20, diminishing returns beyond this).
+- **Refunds**: violation gate passes with corrected R1/R10 grading (14%); derail
+  gate fails (58%, essentially unchanged across every remediation attempt).
+
+**Both domains now fail on exactly one axis each: derail rate**, for two
+different, orthogonal, diagnosed behavioral reasons (retail: budget-limited task
+complexity; refunds: text-only denial instead of tool use). Neither is a grading
+bug -- both are genuine properties of how a small local model handles these
+domains, worth reporting as PoC-level findings rather than continuing to chase.
+
 ## Open questions for owner
 
-1. ~~Raise `max_steps` for retail?~~ **Answered**: swept 20/40/80, diminishing
-   returns confirmed, accepted 80 as final.
-2. ~~Run the guide's three 4.2.2 remediation steps for refunds?~~ **Answered**: all
-   three run cumulatively, ladder exhausted per the guide's own stopping rule,
-   still failing.
-3. Implement R1/R10 grading for refunds (parallel to retail's RT1/RT2) and
-   re-baseline, or accept as a documented scope gap for now?
-4. Does phase 4c's 300-episode D2 gate proceed now that the remediation ladder is
-   exhausted, given it only needs a measurable drift signal rather than a passing
-   baseline?
+1. ~~Raise `max_steps` for retail?~~ **Answered**: swept 20/40/80, accepted 80.
+2. ~~Run the guide's 4.2.2 remediation steps for refunds?~~ **Answered**: ladder
+   exhausted, still failing on derail specifically.
+3. ~~Implement R1/R10 grading?~~ **Answered and done**: both domains' violation
+   gates now pass; derail is the sole remaining failure for each, for different
+   reasons neither gate's guide-specified remediation addresses.
+4. Does phase 4c's 300-episode D2 gate proceed now?
 
 ## Next
 
-Awaiting the owner's read on questions 3-4 above before phase 4c (or an R1/R10
-grading fix) proceeds.
+Per owner authorization: proceeding to phase 4c's D2 gate.
