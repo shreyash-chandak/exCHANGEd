@@ -1,8 +1,8 @@
 """No-memory baseline gate (session-2 guide 4.2): how well does the
-configured model follow policy with empty memory and no gates? Tau2Env
-has no memory/gates system wired in yet (that's session-1 guide 4.3's
-LessonAgent, future work), so "empty memory, no gates" is simply this
-adapter's only mode -- nothing extra to disable here.
+configured model follow policy with empty memory and no gates? Calls
+Tau2Env.run_episode (tau2's own built-in llm_agent), not run_live_episode
+(the memory-injecting LessonAgent, phase 4c) -- "empty memory, no gates"
+means memory never exists at all here, not just starts empty.
 
 Reports: violation rate, task success rate, derail rate (episodes ending
 without any write action at all -- not even deny/escalate), mean turns,
@@ -53,6 +53,16 @@ def main(
     seed: int = typer.Option(0),
     run_id: str = typer.Option(None, "--run-id", help="Defaults to '<domain>-baseline'."),
     runs_dir: str = typer.Option(settings.runs_dir),
+    max_steps: int = typer.Option(
+        20,
+        "--max-steps",
+        help=(
+            "tau2 orchestrator step budget per episode (Tau2Env's own default is 20). "
+            "Owner-authorized override (phase-4.2 baseline gate STOP, docs/checkpoints/"
+            "phase-4.2.md): retail's derail rate clustered at ~11 turns, consistent "
+            "with 20 being exhausted mid-conversation on multi-lookup tasks."
+        ),
+    ),
 ) -> None:
     if not LIVE:
         raise typer.BadParameter("baseline.py requires CHANGE_LIVE=1 (see .env.example)")
@@ -65,7 +75,7 @@ def main(
     import envs.tau2.domains.refunds  # noqa: F401 -- registers at import time (retail is native)
     from envs.tau2.adapter import Tau2Env
 
-    env_obj = Tau2Env(domain=domain, run_id=run_id)
+    env_obj = Tau2Env(domain=domain, run_id=run_id, max_steps=max_steps)
     task_ids = env_obj.task_ids()[:n]
     store = JsonlStore(Path(runs_dir) / run_id)
 
