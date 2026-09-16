@@ -302,14 +302,31 @@ class Tau2Env:
         return records
 
     def _canonicalize_retail(self, task, sim: SimulationRun, agent: Agent) -> list[ExperienceRecord]:
+        # The reference trajectory's actions are ordered lookups-then-write
+        # (e.g. find_user_id -> get_order_details -> get_product_details x2
+        # -> exchange_delivered_order_items) -- taking the *first* action
+        # bearing an order_id (a real bug, found live: every one of the
+        # retail 5-episode smoke test's episodes came back task_type
+        # "other" because that first action is always a read tool, which
+        # task_type_from_tool has no mapping for) silently picks the wrong
+        # order for grading whenever a write does occur. Look for the
+        # write action specifically; only fall back to "any order_id" for
+        # tasks with no write action in their reference (pure lookup /
+        # COMMUNICATE-only tasks).
         order_id = None
         task_type = "other"
-        for ref_action in task.evaluation_criteria.actions or []:
-            candidate_order_id = ref_action.arguments.get("order_id")
-            if candidate_order_id is not None:
-                order_id = candidate_order_id
+        actions = task.evaluation_criteria.actions or []
+        for ref_action in actions:
+            if ref_action.name in _RETAIL_WRITE_TOOLS and ref_action.arguments.get("order_id"):
+                order_id = ref_action.arguments["order_id"]
                 task_type = retail_task_type_from_tool(ref_action.name)
                 break
+        if order_id is None:
+            for ref_action in actions:
+                candidate_order_id = ref_action.arguments.get("order_id")
+                if candidate_order_id is not None:
+                    order_id = candidate_order_id
+                    break
         order = self._db.orders[order_id] if order_id is not None else next(iter(self._db.orders.values()))
 
         reward = 0.0
