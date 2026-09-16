@@ -51,11 +51,16 @@ from envs.tau2.retail_canonical import (
 )
 from envs.tau2.retail_canonical import task_type_from_tool as retail_task_type_from_tool
 from envs.tau2.retail_canonical import user_satisfied as retail_user_satisfied
+from envs.tau2.lesson_agent import LessonAgent
+from change.memory import LessonMemory
 from tau2.data_model.simulation import SimulationRun, TextRunConfig
 from tau2.domains.retail.data_model import RetailDB
 from tau2.domains.retail.utils import RETAIL_DB_PATH
 from tau2.evaluator.evaluator import EvaluationType
+from tau2.orchestrator.orchestrator import Orchestrator
 from tau2.run import get_tasks, run_single_task
+from tau2.runner.build import build_environment, build_user
+from tau2.runner.simulation import run_simulation
 
 _RETAIL_WRITE_TOOLS = {
     "cancel_pending_order",
@@ -120,6 +125,56 @@ def _render_transcript(messages: list) -> str:
     return "\n".join(lines)
 
 
+def _lessons_for_turn(lessons_by_turn: list[list[str]] | None, turn_idx: int) -> list[str]:
+    """`lessons_by_turn` (LessonAgent.lessons_in_context_by_turn) has one
+    entry per `generate_next_message` call -- but tau2's orchestrator
+    always injects a hardcoded scripted opener as the conversation's
+    first assistant message (`Orchestrator.DEFAULT_FIRST_AGENT_MESSAGE`,
+    non-solo mode) *without* calling the agent at all, so `turn_idx=0`
+    (that opener) has no corresponding entry and every later turn_idx is
+    shifted by one. Found live: an unguarded `lessons_by_turn[turn_idx]`
+    raised IndexError on the very first live memory-loop smoke test."""
+    if not lessons_by_turn or turn_idx == 0:
+        return []
+    return lessons_by_turn[turn_idx - 1]
+
+
+def _refunds_episode_context(task, db):
+    """Shared by `run_episode` (post-hoc canonicalization) and
+    `run_live_episode` (needs the same context up front to build the
+    LessonAgent's per-turn state closure) -- one source of truth for
+    "which order/customer/request is this episode about"."""
+    write_action = task.evaluation_criteria.actions[1]
+    order_id = write_action.arguments["order_id"]
+    order = db.orders[order_id]
+    customer = db.customers[order.customer_id]
+    request_type = task.description.purpose.split(",")[0].split()[0]
+    persona = task.user_scenario.persona
+    return order, customer, request_type, persona, order_id
+
+
+def _retail_episode_context(task, db):
+    """Same sharing rationale as `_refunds_episode_context`. See
+    `_canonicalize_retail`'s comment for why the write action (not just
+    "any action bearing an order_id") must be found specifically."""
+    order_id = None
+    task_type = "other"
+    actions = task.evaluation_criteria.actions or []
+    for ref_action in actions:
+        if ref_action.name in _RETAIL_WRITE_TOOLS and ref_action.arguments.get("order_id"):
+            order_id = ref_action.arguments["order_id"]
+            task_type = retail_task_type_from_tool(ref_action.name)
+            break
+    if order_id is None:
+        for ref_action in actions:
+            candidate_order_id = ref_action.arguments.get("order_id")
+            if candidate_order_id is not None:
+                order_id = candidate_order_id
+                break
+    order = db.orders[order_id] if order_id is not None else next(iter(db.orders.values()))
+    return order, task_type, order_id
+
+
 class Tau2Env:
     """`Env` protocol implementation driving a real tau2 domain through a
     real LLM. Requires `CHANGE_LIVE=1` at the caller's discretion -- this
@@ -153,6 +208,10 @@ class Tau2Env:
 
     def task_ids(self) -> list[str]:
         return list(self._tasks.keys())
+
+    @property
+    def t_global(self) -> int:
+        return self._t_global
 
     def run_episode(self, task_id: str, agent: Agent, seed: int) -> EpisodeResult:
         task = self._tasks[task_id]
@@ -193,13 +252,96 @@ class Tau2Env:
             records = self._canonicalize_retail(task, sim, agent)
         return EpisodeResult(records=records, reward=records[-1].reward if records else 0.0)
 
-    def _canonicalize_refunds(self, task, sim: SimulationRun, agent: Agent) -> list[ExperienceRecord]:
-        write_action = task.evaluation_criteria.actions[1]
-        order_id = write_action.arguments["order_id"]
-        order = self._db.orders[order_id]
-        customer = self._db.customers[order.customer_id]
-        request_type = task.description.purpose.split(",")[0].split()[0]
-        persona = task.user_scenario.persona
+    def run_live_episode(
+        self, task_id: str, memory: LessonMemory, gates: dict, seed: int
+    ) -> EpisodeResult:
+        """Like `run_episode`, but drives the episode through a
+        memory-injecting `LessonAgent` (session-1 guide 4.3, wired live in
+        session-2 guide 4c.2) instead of tau2's own built-in `llm_agent`.
+
+        tau2's `build_agent`/`run_single_task` only construct agents by a
+        registry-looked-up string name with a fixed kwarg set (tools,
+        domain_policy, llm, llm_args, task) -- no room for our own
+        `LessonMemory`/gates objects. So this builds the environment,
+        agent, user, and orchestrator directly instead of going through
+        `TextRunConfig`/`run_single_task`, the same low-level path
+        `tau2.runner.simulation.run_simulation`'s own docstring
+        demonstrates (docs/tau2_interfaces.md item 2, option (b))."""
+        task = self._tasks[task_id]
+        tau2_domain = "retail_d3" if self.domain == "retail" and self.policy_version == "v3" else self.domain
+        environment = build_environment(tau2_domain)
+
+        if self.domain == "refunds":
+            order, customer, request_type, persona, order_id = _refunds_episode_context(
+                task, self._db
+            )
+            state_fn = lambda ptb: canonical_state(order, request_type, persona, ptb)  # noqa: E731
+            escalate_tool = "escalate"
+            escalate_args_fn = lambda: {  # noqa: E731
+                "order_id": order_id,
+                "reason": "policy gate: high-value request outside eligibility window",
+            }
+        else:
+            order, task_type, order_id = _retail_episode_context(task, self._db)
+            state_fn = lambda ptb: retail_canonical_state(order, task_type, ptb)  # noqa: E731
+            escalate_tool = "transfer_to_human_agents"
+            escalate_args_fn = lambda: {  # noqa: E731
+                "summary": f"Escalating order {order_id} per policy gate (high-value, outside eligibility)."
+            }
+
+        agent = LessonAgent(
+            tools=environment.get_tools(),
+            domain_policy=environment.get_policy(),
+            llm=LLM_MODEL,
+            llm_args=dict(_THINKING_DISABLED_LLM_ARGS),
+            memory=memory,
+            gates=gates,
+            state_fn=state_fn,
+            escalate_tool=escalate_tool,
+            escalate_args_fn=escalate_args_fn,
+        )
+        # `_canonicalize_*` read agent_id/agent_version/memory_version via
+        # getattr(..., default) since tau2's built-in llm_agent (the
+        # run_episode path) has none of these -- LessonAgent gets a real
+        # memory_version here so records reflect the actual evolving
+        # memory rather than the fallback default of 0.
+        agent.memory_version = memory.version
+        user = build_user(
+            "user_simulator",
+            environment,
+            task,
+            llm=LLM_MODEL,
+            llm_args=dict(_THINKING_DISABLED_LLM_ARGS),
+        )
+        orchestrator = Orchestrator(
+            domain=tau2_domain,
+            agent=agent,
+            user=user,
+            environment=environment,
+            task=task,
+            max_steps=self.max_steps,
+            seed=seed,
+        )
+        sim = run_simulation(orchestrator, evaluation_type=EvaluationType.ALL_IGNORE_BASIS)
+
+        if self.domain == "refunds":
+            records = self._canonicalize_refunds(
+                task, sim, agent, lessons_by_turn=agent.lessons_in_context_by_turn
+            )
+        else:
+            records = self._canonicalize_retail(
+                task, sim, agent, lessons_by_turn=agent.lessons_in_context_by_turn
+            )
+        return EpisodeResult(records=records, reward=records[-1].reward if records else 0.0)
+
+    def _canonicalize_refunds(
+        self,
+        task,
+        sim: SimulationRun,
+        agent: Agent,
+        lessons_by_turn: list[list[str]] | None = None,
+    ) -> list[ExperienceRecord]:
+        order, customer, request_type, persona, order_id = _refunds_episode_context(task, self._db)
 
         reward = 0.0
         if sim.reward_info is not None:
@@ -294,6 +436,7 @@ class Tau2Env:
                 tokens_in=(message.usage or {}).get("prompt_tokens", 0) if message.usage else 0,
                 tokens_out=(message.usage or {}).get("completion_tokens", 0) if message.usage else 0,
                 cost_usd=message.cost or 0.0,
+                lessons_in_context=_lessons_for_turn(lessons_by_turn, turn_idx),
             )
             records.append(record)
             self._t_global += 1
@@ -301,33 +444,14 @@ class Tau2Env:
 
         return records
 
-    def _canonicalize_retail(self, task, sim: SimulationRun, agent: Agent) -> list[ExperienceRecord]:
-        # The reference trajectory's actions are ordered lookups-then-write
-        # (e.g. find_user_id -> get_order_details -> get_product_details x2
-        # -> exchange_delivered_order_items) -- taking the *first* action
-        # bearing an order_id (a real bug, found live: every one of the
-        # retail 5-episode smoke test's episodes came back task_type
-        # "other" because that first action is always a read tool, which
-        # task_type_from_tool has no mapping for) silently picks the wrong
-        # order for grading whenever a write does occur. Look for the
-        # write action specifically; only fall back to "any order_id" for
-        # tasks with no write action in their reference (pure lookup /
-        # COMMUNICATE-only tasks).
-        order_id = None
-        task_type = "other"
-        actions = task.evaluation_criteria.actions or []
-        for ref_action in actions:
-            if ref_action.name in _RETAIL_WRITE_TOOLS and ref_action.arguments.get("order_id"):
-                order_id = ref_action.arguments["order_id"]
-                task_type = retail_task_type_from_tool(ref_action.name)
-                break
-        if order_id is None:
-            for ref_action in actions:
-                candidate_order_id = ref_action.arguments.get("order_id")
-                if candidate_order_id is not None:
-                    order_id = candidate_order_id
-                    break
-        order = self._db.orders[order_id] if order_id is not None else next(iter(self._db.orders.values()))
+    def _canonicalize_retail(
+        self,
+        task,
+        sim: SimulationRun,
+        agent: Agent,
+        lessons_by_turn: list[list[str]] | None = None,
+    ) -> list[ExperienceRecord]:
+        order, task_type, order_id = _retail_episode_context(task, self._db)
 
         reward = 0.0
         if sim.reward_info is not None:
@@ -410,6 +534,7 @@ class Tau2Env:
                 tokens_in=(message.usage or {}).get("prompt_tokens", 0) if message.usage else 0,
                 tokens_out=(message.usage or {}).get("completion_tokens", 0) if message.usage else 0,
                 cost_usd=message.cost or 0.0,
+                lessons_in_context=_lessons_for_turn(lessons_by_turn, turn_idx),
             )
             records.append(record)
             self._t_global += 1
