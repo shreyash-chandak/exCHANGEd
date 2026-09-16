@@ -12,13 +12,14 @@ app = typer.Typer(add_completion=False)
 
 @app.command()
 def main(
-    env: str = typer.Option("mock"),
+    env: str = typer.Option("mock", help="'mock' or 'tau2' (tau2 requires CHANGE_LIVE=1)."),
+    domain: str = typer.Option("refunds", help="tau2 domain name (only used when --env tau2)."),
     systems: str = typer.Option(..., help="comma-separated: A0,A1,A2,A3,A4,FULL"),
     conditions: str = typer.Option(..., help="comma-separated: d1,d2,d3"),
     seeds: str = typer.Option(..., help="comma-separated seeds: 0,1"),
     n_episodes: int = typer.Option(1000, "--n-episodes"),
     out: str = typer.Option(..., help="output directory, e.g. runs/grid-mock"),
-    n_tasks: int = typer.Option(400),
+    n_tasks: int = typer.Option(400, help="Mock only -- tau2 domains have a fixed task count."),
     sim_trajectories: int = typer.Option(
         None, "--sim-trajectories", help="overrides SIM_TRAJECTORIES uniformly for every cell"
     ),
@@ -37,8 +38,13 @@ def main(
         ),
     ),
 ) -> None:
-    if env != "mock":
-        raise typer.BadParameter("only --env mock is implemented")
+    if env not in ("mock", "tau2"):
+        raise typer.BadParameter("--env must be 'mock' or 'tau2'")
+    if env == "tau2":
+        from change.config import LIVE
+
+        if not LIVE:
+            raise typer.BadParameter("--env tau2 requires CHANGE_LIVE=1 (see .env.example)")
     if not serial:
         raise typer.BadParameter("only --serial is implemented (no concurrent runner exists yet)")
 
@@ -55,6 +61,8 @@ def main(
         n_tasks=n_tasks,
         sim_trajectories=sim_trajectories,
         sim_horizon=sim_horizon,
+        env=env,
+        domain=domain,
     )
 
     typer.echo(f"{len(rows)} cells written to {out}/summary.csv")
