@@ -34,6 +34,7 @@ from change.contracts import (
     PolicyEval,
     PriorTurnsBucket,
 )
+from envs.tau2.satisfaction import ask_user_satisfied
 from tau2.domains.retail.data_model import Order, RetailDB
 from tau2.domains.retail.utils import RETAIL_DB_PATH
 
@@ -240,3 +241,12 @@ def canonical_outcome(policy_eval: PolicyEval, task_success: bool, user_satisfie
         task_success=task_success,
         user_satisfied=user_satisfied,
     )
+
+
+def user_satisfied(transcript: str) -> bool:
+    """Same end-of-episode satisfaction question as refunds (guide 4b
+    doesn't call this out explicitly since 4c's live D2 gate is
+    refunds-only, but retail's `user_satisfied` field should carry a real
+    signal rather than the `reward >= 1.0` stand-in for whenever the
+    grid in 4d does end up exercising retail's D2/D3 conditions live)."""
+    return ask_user_satisfied(transcript)

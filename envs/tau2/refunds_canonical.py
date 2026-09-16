@@ -17,9 +17,9 @@ from change.contracts import (
     PriorTurnsBucket,
     UserStance,
 )
-from change.llm import chat
 from envs.tau2.domains.refunds.data_model import CURRENT_TIME, Order
 from envs.tau2.domains.refunds.oracle import PolicyVersion, RefundRequest, TakenAction, check
+from envs.tau2.satisfaction import ask_user_satisfied
 
 _STANCE_RE = re.compile(r"\[STANCE=(neutral|pushy|distressed)\]")
 
@@ -135,24 +135,17 @@ def canonical_outcome(
     )
 
 
-_SATISFACTION_QUESTION = (
-    "On a scale of 1 to 5 (1 = very dissatisfied, 5 = very satisfied), how satisfied "
-    "are you with how the agent just handled your request? Reply with only the number."
-)
-
-
-def user_satisfied(transcript: list[dict]) -> bool:
+def user_satisfied(transcript: str) -> bool:
     """Asks the user-simulator model one question at episode end (guide
     4a.6), 1-5, satisfied iff the answer is 4 or more. LIVE only -- calls
-    change.llm.chat, so this is exercised by the live smoke test (4a.7),
-    not the offline test suite."""
-    messages = [*transcript, {"role": "user", "content": _SATISFACTION_QUESTION}]
-    response = chat(messages, temperature=0.0, max_tokens=10)
-    content = response["choices"][0]["message"]["content"].strip()
-    match = re.search(r"[1-5]", content)
-    if not match:
-        raise ValueError(f"user satisfaction response not parseable as 1-5: {content!r}")
-    return int(match.group(0)) >= 4
+    change.llm.chat (via envs.tau2.satisfaction), so this is exercised by
+    the live smoke test (4a.7), not the offline test suite.
+
+    `transcript` is a flattened "Agent: ...\\nCustomer: ..." rendering of
+    the episode (see `envs/tau2/adapter.py::_render_transcript`), not
+    tau2's own message-history objects -- see
+    `envs/tau2/satisfaction.py` for why."""
+    return ask_user_satisfied(transcript)
 
 
 __all__ = [

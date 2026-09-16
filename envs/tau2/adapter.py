@@ -39,6 +39,7 @@ from envs.tau2.domains.refunds.data_model import RefundsDB
 from envs.tau2.domains.refunds.oracle import RefundRequest, check
 from envs.tau2.domains.refunds.utils import REFUNDS_DB_PATH
 from envs.tau2.refunds_canonical import canonical_action, canonical_state
+from envs.tau2.refunds_canonical import user_satisfied as refunds_user_satisfied
 from envs.tau2.retail_canonical import (
     canonical_action as retail_canonical_action,
 )
@@ -49,6 +50,7 @@ from envs.tau2.retail_canonical import (
     grade_write_action as retail_grade_write_action,
 )
 from envs.tau2.retail_canonical import task_type_from_tool as retail_task_type_from_tool
+from envs.tau2.retail_canonical import user_satisfied as retail_user_satisfied
 from tau2.data_model.simulation import SimulationRun, TextRunConfig
 from tau2.domains.retail.data_model import RetailDB
 from tau2.domains.retail.utils import RETAIL_DB_PATH
@@ -97,6 +99,26 @@ def _advance_prior_turns(bucket: PriorTurnsBucket) -> PriorTurnsBucket:
     return "t4plus"
 
 
+def _render_transcript(messages: list) -> str:
+    """Flattens tau2's message-history objects into "Agent: ..." /
+    "Customer: ..." lines for the end-of-episode satisfaction question
+    (envs/tau2/satisfaction.py) -- deliberately not tau2's own message
+    schema, see that module's docstring for why."""
+    lines: list[str] = []
+    for message in messages:
+        role = getattr(message, "role", None)
+        if role == "assistant":
+            speaker = "Agent"
+        elif role == "user":
+            speaker = "Customer"
+        else:
+            continue  # system/tool messages aren't part of the customer's own view
+        content = getattr(message, "content", None)
+        if content:
+            lines.append(f"{speaker}: {content}")
+    return "\n".join(lines)
+
+
 class Tau2Env:
     """`Env` protocol implementation driving a real tau2 domain through a
     real LLM. Requires `CHANGE_LIVE=1` at the caller's discretion -- this
@@ -122,6 +144,8 @@ class Tau2Env:
             self._db = RefundsDB.load(REFUNDS_DB_PATH)
             self._tasks = {t.id: t for t in get_tasks(task_set_name=domain, task_split_name=None)}
         else:
+            import envs.tau2.domains.retail_d3  # noqa: F401 -- registers "retail_d3" at import
+
             self._db = RetailDB.load(RETAIL_DB_PATH)
             self._tasks = {t.id: t for t in get_tasks(task_set_name=domain, task_split_name="base")}
         self._t_global = 0
@@ -169,6 +193,11 @@ class Tau2Env:
         prior_turns_bucket: PriorTurnsBucket = "t0"
         messages = sim.get_messages()
         assistant_indices = [i for i, m in enumerate(messages) if m.role == "assistant"]
+        # One extra live call per episode (guide 4a.6): a real satisfaction
+        # signal distinct from `reward`/task_success, which matters for D2
+        # ("feedback=satisfaction") to be a meaningfully different signal
+        # from D1 ("feedback=truth") at all.
+        satisfied = refunds_user_satisfied(_render_transcript(messages))
 
         for turn_idx, msg_idx in enumerate(assistant_indices):
             message = messages[msg_idx]
@@ -226,7 +255,7 @@ class Tau2Env:
             outcome = CanonicalOutcome(
                 policy_compliant=policy_eval.compliant,
                 task_success=reward >= 1.0,
-                user_satisfied=reward >= 1.0,
+                user_satisfied=satisfied,
             )
 
             record = ExperienceRecord(
@@ -276,6 +305,7 @@ class Tau2Env:
         prior_modify_calls: dict[str, int] = {}
         messages = sim.get_messages()
         assistant_indices = [i for i, m in enumerate(messages) if m.role == "assistant"]
+        satisfied = retail_user_satisfied(_render_transcript(messages))
 
         for turn_idx, msg_idx in enumerate(assistant_indices):
             message = messages[msg_idx]
@@ -324,7 +354,7 @@ class Tau2Env:
             outcome = CanonicalOutcome(
                 policy_compliant=policy_eval.compliant,
                 task_success=reward >= 1.0,
-                user_satisfied=reward >= 1.0,
+                user_satisfied=satisfied,
             )
 
             record = ExperienceRecord(
