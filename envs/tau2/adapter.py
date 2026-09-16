@@ -175,6 +175,42 @@ def _retail_episode_context(task, db):
     return order, task_type, order_id
 
 
+class Tau2AgentHandle:
+    """`Agent`-protocol stand-in for a live tau2 episode (session-2 guide
+    4d: wiring the full governance loop -- GovernanceLoop, Sandbox,
+    evolve.canary/distill -- against a live tau2 domain).
+
+    Doesn't drive turns itself -- `LessonAgent` does that internally,
+    inside `Tau2Env.run_episode`'s dispatch -- it just carries the
+    `memory`/`gates` references. Every call site in change/loop.py,
+    change/sandbox.py, and change/evolve.py already shares the exact same
+    pattern: `agent = agent_factory(memory, gates, rng); env.run_episode(
+    task_id, agent, seed)`. Because that pattern is identical for every
+    Env (it was written once, generically, for MockAgent), supplying a
+    `Tau2Env` + `tau2_agent_factory` pair here instead of
+    `MockRetailEnv` + `default_agent_factory` makes the entire existing
+    governance loop work against a live tau2 domain with **zero changes**
+    to any of those three modules -- only `Tau2Env.run_episode` needed to
+    learn to recognize this handle and dispatch to the live
+    memory-injecting path (`run_live_episode`) instead of tau2's built-in
+    `llm_agent`."""
+
+    def __init__(self, memory: LessonMemory, gates: dict, rng):
+        self.memory = memory
+        self.gates = gates
+        self.rng = rng
+        self.agent_id = "tau2-lesson-agent"
+        self.agent_version = 1
+
+    @property
+    def memory_version(self) -> int:
+        return self.memory.version
+
+
+def tau2_agent_factory(memory: LessonMemory, gates: dict, rng) -> Tau2AgentHandle:
+    return Tau2AgentHandle(memory, gates, rng)
+
+
 class Tau2Env:
     """`Env` protocol implementation driving a real tau2 domain through a
     real LLM. Requires `CHANGE_LIVE=1` at the caller's discretion -- this
@@ -197,6 +233,8 @@ class Tau2Env:
         self.policy_version = policy_version
         self.max_steps = max_steps
         if domain == "refunds":
+            import envs.tau2.domains.refunds_d3  # noqa: F401 -- registers "refunds_d3" at import
+
             self._db = RefundsDB.load(REFUNDS_DB_PATH)
             self._tasks = {t.id: t for t in get_tasks(task_set_name=domain, task_split_name=None)}
         else:
@@ -212,6 +250,15 @@ class Tau2Env:
     def task(self, task_id: str):
         return self._tasks[task_id]
 
+    def _tau2_domain_name(self) -> str:
+        """D3's tightened policy is a separate registered tau2 domain
+        (envs/tau2/domains/retail_d3.py, refunds_d3.py) -- same db/tools/
+        tasks, swapped policy text, per guide 4b.3 ("no policy text change
+        needed for [grading]... the agent's policy text is swapped")."""
+        if self.policy_version != "v3":
+            return self.domain
+        return f"{self.domain}_d3"
+
     @property
     def t_global(self) -> int:
         return self._t_global
@@ -224,12 +271,11 @@ class Tau2Env:
         self._t_global = value
 
     def run_episode(self, task_id: str, agent: Agent, seed: int) -> EpisodeResult:
+        if isinstance(agent, Tau2AgentHandle):
+            return self.run_live_episode(task_id, agent.memory, agent.gates, seed)
+
         task = self._tasks[task_id]
-        # retail's D3 policy is a separate registered domain variant
-        # (envs/tau2/domains/retail_d3.py) -- same db/tools/tasks, swapped
-        # policy text, per guide 4b.3 ("no policy text change needed for
-        # [grading]... the agent's policy text is swapped").
-        tau2_domain = "retail_d3" if self.domain == "retail" and self.policy_version == "v3" else self.domain
+        tau2_domain = self._tau2_domain_name()
         config = TextRunConfig(
             domain=tau2_domain,
             agent=self.agent_name,
@@ -278,7 +324,7 @@ class Tau2Env:
         `tau2.runner.simulation.run_simulation`'s own docstring
         demonstrates (docs/tau2_interfaces.md item 2, option (b))."""
         task = self._tasks[task_id]
-        tau2_domain = "retail_d3" if self.domain == "retail" and self.policy_version == "v3" else self.domain
+        tau2_domain = self._tau2_domain_name()
         environment = build_environment(tau2_domain)
 
         if self.domain == "refunds":
